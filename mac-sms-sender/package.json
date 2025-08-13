@@ -1,0 +1,17 @@
+{
+  "name": "poker-sms-sender",
+  "version": "1.0.0",
+  "description": "Mac script to send SMS messages for poker game confirmations",
+  "main": "sender.js",
+  "type": "module",
+  "scripts": {
+    "start": "node sender.js",
+    "install-deps": "npm install"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "node-cron": "^3.0.3"
+  },
+  "author": "Poker Game Admin",
+  "license": "MIT"
+}

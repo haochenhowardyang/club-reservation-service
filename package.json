@@ -1,0 +1,44 @@
+{
+  "name": "tipsy-club",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:migrate-prod": "node scripts/database/migrate-production.js",
+    "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "@auth/core": "^0.40.0",
+    "@auth/drizzle-adapter": "^1.10.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/luxon": "^3.6.2",
+    "bcryptjs": "^3.0.2",
+    "better-sqlite3": "^12.2.0",
+    "date-fns": "^4.1.0",
+    "drizzle-kit": "^0.31.4",
+    "drizzle-orm": "^0.44.3",
+    "luxon": "^3.7.1",
+    "next": "15.4.4",
+    "next-auth": "^4.24.11",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "zod": "^4.0.10"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "15.4.4",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
