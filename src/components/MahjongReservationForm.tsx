@@ -494,7 +494,7 @@ export default function MahjongReservationForm({
             name="duration"
             value={duration?.toString() || ""}
             onChange={(e) => handleDurationChange(e.target.value)}
-            className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+            className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-2 border-black rounded-md"
             required
           >
             {getAvailableDurations().map((option) => (
