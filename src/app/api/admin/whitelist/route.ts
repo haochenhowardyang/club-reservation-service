@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { emailWhitelist } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { createUserFromWhitelist } from "@/lib/utils/user-creation";
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,9 +19,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Get all whitelist entries
-    const whitelist = await db.query.emailWhitelist.findMany({
-      orderBy: (emailWhitelist, { desc }) => [desc(emailWhitelist.createdAt)],
-    });
+    const whitelist = await db
+      .select()
+      .from(emailWhitelist)
+      .orderBy(emailWhitelist.createdAt);
 
     return NextResponse.json(whitelist);
   } catch (error) {
@@ -55,16 +57,36 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if email already exists in whitelist
-    const existingEntry = await db.query.emailWhitelist.findFirst({
-      where: eq(emailWhitelist.email, email.toLowerCase()),
-    });
+    const existingEntry = await db
+      .select()
+      .from(emailWhitelist)
+      .where(eq(emailWhitelist.email, email.toLowerCase()))
+      .limit(1);
 
-    if (existingEntry) {
+    if (existingEntry.length > 0) {
       return NextResponse.json(
         { message: "Email already exists in whitelist" },
         { status: 400 }
       );
     }
+
+    // Create user record first
+    console.log(`[WHITELIST] Creating user for email: ${email}`);
+    const userCreationResult = await createUserFromWhitelist({
+      email: email.toLowerCase(),
+      phone: phone || undefined,
+      role: email.toLowerCase() === 'haochenhowardyang@gmail.com' ? 'admin' : 'user'
+    });
+
+    if (!userCreationResult.success) {
+      console.error(`[WHITELIST] Failed to create user: ${userCreationResult.message}`);
+      return NextResponse.json(
+        { message: `Failed to create user: ${userCreationResult.message}` },
+        { status: 500 }
+      );
+    }
+
+    console.log(`[WHITELIST] User created successfully: ${userCreationResult.userId}`);
 
     // Add email to whitelist with optional phone
     const [newEntry] = await db
@@ -72,13 +94,18 @@ export async function POST(request: NextRequest) {
       .values({
         email: email.toLowerCase(),
         phone: phone || null, // Store phone if provided
-        isPhoneVerified: false,
         createdAt: new Date(),
         updatedAt: new Date(),
       })
       .returning();
 
-    return NextResponse.json(newEntry, { status: 201 });
+    console.log(`[WHITELIST] Whitelist entry created successfully`);
+
+    return NextResponse.json({
+      ...newEntry,
+      userId: userCreationResult.userId,
+      message: "Email added to whitelist and user created successfully"
+    }, { status: 201 });
   } catch (error) {
     console.error("Error adding to whitelist:", error);
     return NextResponse.json(

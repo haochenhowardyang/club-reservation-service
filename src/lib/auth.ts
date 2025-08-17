@@ -27,39 +27,66 @@ export const authOptions: NextAuthOptions = {
   events: {
     async createUser({ user }) {
       console.log(`[AUTH] 🔥 createUser EVENT TRIGGERED`);
-      console.log(`[AUTH] Creating user in main users table: ${user.email} (ID: ${user.id})`);
-      console.log(`[AUTH] User object:`, JSON.stringify(user, null, 2));
+      console.log(`[AUTH] OAuth user sign-in: ${user.email} (NextAuth ID: ${user.id})`);
       
       // Import the main users table
       const { users: mainUsers } = await import('./db/schema');
       
       try {
-        // First check if user already exists in main users table
-        console.log(`[AUTH] Checking if user already exists in main users table...`);
-        const existingUser = await db.query.users.findFirst({
-          where: (mainUsers, { eq }) => eq(mainUsers.email, user.email!),
-        });
+        // Check if user already exists in main users table (pre-created from whitelist)
+        console.log(`[AUTH] Checking for existing user in main users table...`);
+        const existingMainUser = await db
+          .select()
+          .from(mainUsers)
+          .where(eq(mainUsers.email, user.email!.toLowerCase()))
+          .limit(1);
         
-        if (existingUser) {
-          console.log(`[AUTH] ⚠️  User already exists in main users table: ${user.email}`);
-          console.log(`[AUTH] Existing user ID: ${existingUser.id}, New user ID: ${user.id}`);
+        if (existingMainUser.length > 0) {
+          console.log(`[AUTH] 🔄 Found existing user in main table: ${user.email}`);
+          console.log(`[AUTH] Existing main table ID: ${existingMainUser[0].id}, NextAuth ID: ${user.id}`);
           
-          // If the IDs are different, we might need to update the existing record
-          if (existingUser.id !== user.id) {
-            console.log(`[AUTH] 🔄 User IDs don't match - this might cause session issues`);
-            console.log(`[AUTH] Consider updating the existing user record or handling ID mismatch`);
+          // Update main table to use NextAuth ID for consistency
+          console.log(`[AUTH] 🔧 Updating main table user to use NextAuth ID`);
+          
+          const oldId = existingMainUser[0].id;
+          
+          await db
+            .update(mainUsers)
+            .set({ 
+              id: user.id, // Use the NextAuth ID
+              image: user.image || existingMainUser[0].image, // Update image from Google if available
+              updatedAt: new Date()
+            })
+            .where(eq(mainUsers.id, oldId));
+          
+          // Update auth table with additional info from main table
+          await db
+            .update(authUsers)
+            .set({
+              phone: existingMainUser[0].phone,
+              role: existingMainUser[0].role,
+              strikes: existingMainUser[0].strikes,
+              isActive: existingMainUser[0].isActive
+            })
+            .where(eq(authUsers.id, user.id));
+          
+          console.log(`[AUTH] ✅ Synchronized both tables - using NextAuth ID: ${user.id}`);
+          
+          // Note: Foreign key references in other tables (like poker players) 
+          // will need to be updated if they reference the old ID
+          if (oldId !== user.id) {
+            console.log(`[AUTH] ⚠️ User ID changed from ${oldId} to ${user.id} - foreign key references may need updating`);
           }
           
-          return; // Skip creation since user already exists
+          return;
         }
         
-        console.log(`[AUTH] User not found in main users table, creating new user...`);
-        console.log(`[AUTH] Attempting to insert user into main users table...`);
+        console.log(`[AUTH] No existing user found, creating new user in main table...`);
         
-        // Create user in main users table
-        const insertResult = await db.insert(mainUsers).values({
+        // Create user in main users table (normal OAuth flow)
+        await db.insert(mainUsers).values({
           id: user.id,
-          email: user.email!,
+          email: user.email!.toLowerCase(),
           name: user.name || user.email!.split('@')[0],
           image: user.image,
           role: user.email === 'haochenhowardyang@gmail.com' ? 'admin' : 'user',
@@ -69,62 +96,39 @@ export const authOptions: NextAuthOptions = {
           updatedAt: new Date(),
         });
         
-        console.log(`[AUTH] ✅ Successfully created user in main users table: ${user.email}`);
-        console.log(`[AUTH] Insert result:`, insertResult);
-        
-        // Verify the user was created
-        const verifyUser = await db.query.users.findFirst({
-          where: (mainUsers, { eq }) => eq(mainUsers.id, user.id),
-        });
-        console.log(`[AUTH] Verification check:`, verifyUser ? 'USER_FOUND' : 'USER_NOT_FOUND');
+        console.log(`[AUTH] ✅ Created new user in main users table: ${user.email}`);
         
       } catch (error) {
-        console.error(`[AUTH] ❌ CRITICAL ERROR creating user in main users table:`, error);
-        console.error(`[AUTH] Error details:`, {
-          message: error instanceof Error ? error.message : 'Unknown error',
-          stack: error instanceof Error ? error.stack : 'No stack trace'
-        });
+        console.error(`[AUTH] ❌ Error in createUser event:`, error);
         
-        // If it's a unique constraint error, that's actually okay - user already exists
         if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
-          console.log(`[AUTH] 💡 User already exists (UNIQUE constraint) - this is expected behavior`);
+          console.log(`[AUTH] 💡 User already exists (UNIQUE constraint) - this is expected`);
         }
       }
 
-      // If the email is haochenhowardyang@gmail.com, set role to admin in auth table too
+      // Set admin role in auth table if needed
       if (user.email === 'haochenhowardyang@gmail.com') {
         await db
           .update(authUsers)
           .set({ role: 'admin' })
           .where(eq(authUsers.id, user.id));
-        console.log(`Set new user ${user.email} as admin in auth table`);
+        console.log(`[AUTH] Set admin role for ${user.email}`);
       }
 
-      // Check if user email is in whitelist
+      // Copy phone number from whitelist if available
       if (user.email) {
-        const whitelistEntry = await db.query.emailWhitelist.findFirst({
-          where: eq(emailWhitelist.email, user.email.toLowerCase()),
-        });
+        const whitelistEntry = await db
+          .select()
+          .from(emailWhitelist)
+          .where(eq(emailWhitelist.email, user.email.toLowerCase()))
+          .limit(1);
         
-        // If found and has phone number, copy phone number from whitelist to user
-        if (whitelistEntry?.phone) {
+        if (whitelistEntry.length > 0 && whitelistEntry[0].phone) {
           await db
             .update(authUsers)
-            .set({ phone: whitelistEntry.phone })
+            .set({ phone: whitelistEntry[0].phone })
             .where(eq(authUsers.id, user.id));
-          console.log(`Copied phone number from whitelist for ${user.email}`);
-          
-          // Also update main users table
-          try {
-            const { users: mainUsers } = await import('./db/schema');
-            await db
-              .update(mainUsers)
-              .set({ phone: whitelistEntry.phone })
-              .where(eq(mainUsers.id, user.id));
-            console.log(`Copied phone number to main users table for ${user.email}`);
-          } catch (error) {
-            console.error(`Error updating phone in main users table:`, error);
-          }
+          console.log(`[AUTH] Copied phone from whitelist for ${user.email}`);
         }
       }
     },
@@ -140,11 +144,13 @@ export const authOptions: NextAuthOptions = {
         console.log(`[AUTH] 🔍 Checking if ${user.email} is whitelisted...`);
         
         try {
-          const whitelistEntry = await db.query.emailWhitelist.findFirst({
-            where: eq(emailWhitelist.email, user.email.toLowerCase()),
-          });
+          const whitelistEntry = await db
+            .select()
+            .from(emailWhitelist)
+            .where(eq(emailWhitelist.email, user.email.toLowerCase()))
+            .limit(1);
           
-          if (!whitelistEntry) {
+          if (whitelistEntry.length === 0) {
             console.log(`[AUTH] ❌ User ${user.email} is NOT whitelisted - blocking sign-in`);
             return false; // Block sign-in for non-whitelisted users
           }
