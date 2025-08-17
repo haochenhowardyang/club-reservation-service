@@ -127,8 +127,8 @@ export async function sendGameNotifications(
           status: 'pending',
         });
 
-        // Generate SMS message
-        const message = generateGameNotificationSMS({
+        // Generate SMS messages - split into two separate messages for better link clickability
+        const infoMessage = generateGameNotificationSMS({
           playerName: player.user.name,
           date: game.date,
           startTime: game.startTime,
@@ -138,10 +138,21 @@ export async function sendGameNotifications(
           notes: game.notes || undefined,
         });
 
-        // Queue SMS
+        const linkMessage = tokenResult.joinUrl;
+
+        // Queue both SMS messages
+        // First message: Game info
         await db.insert(smsQueue).values({
           phoneNumber: player.user.phone,
-          message,
+          message: infoMessage,
+          status: 'pending',
+          notificationId: Number(notification.lastInsertRowid),
+        });
+
+        // Second message: Just the link
+        await db.insert(smsQueue).values({
+          phoneNumber: player.user.phone,
+          message: linkMessage,
           status: 'pending',
           notificationId: Number(notification.lastInsertRowid),
         });
@@ -201,12 +212,9 @@ Hi ${playerName}!
 
   const customPart = customMessage ? `\n\n${customMessage}` : '';
 
-  const joinPart = `
+  let trailingMessage = `\n\n🔗一键加入Waitlist:`
 
-一键加入：
-${joinUrl}`;
-
-  return baseMessage + customPart + joinPart;
+  return baseMessage + customPart + trailingMessage;
 }
 
 /**

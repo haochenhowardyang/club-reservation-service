@@ -40,7 +40,6 @@ export const SMSTemplates = {
     date: string;
     startTime: string;
     blindLevel: string;
-    confirmationLink: string;
     notes?: string;
   }) => {
     const chineseDateTimeFormatted = formatChineseDateTimeForSMS(gameDetails.date, gameDetails.startTime);
@@ -55,9 +54,14 @@ export const SMSTemplates = {
       message += `\n📝 备注：${gameDetails.notes.trim()}`;
     }
 
-    message += `\n\n请在四小时内接受或拒绝邀请:\n${gameDetails.confirmationLink}`;
+    message += `\n\n🔗请在四小时内接受或拒绝邀请：`;
 
     return message;
+  },
+
+  // Separate template for confirmation links
+  pokerConfirmationLink: (confirmationLink: string) => {
+    return confirmationLink;
   },
 
   pokerReminder: (gameDetails: {

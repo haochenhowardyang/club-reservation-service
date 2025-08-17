@@ -77,7 +77,7 @@ export async function sendPokerConfirmationSMS(
 
     const notificationId = Number(notificationResult.lastInsertRowid);
 
-    // Generate SMS message
+    // Generate SMS messages - split into two separate messages for better link clickability
     console.log(`[POKER_SMS] Game data for SMS:`, {
       id: game.id,
       date: game.date,
@@ -88,20 +88,31 @@ export async function sendPokerConfirmationSMS(
       notesLength: game.notes?.length
     });
 
-    const message = SMSTemplates.pokerConfirmation({
+    const infoMessage = SMSTemplates.pokerConfirmation({
       date: game.date,
       startTime: game.startTime,
       blindLevel: game.blindLevel || 'TBD',
-      confirmationLink: confirmationUrl,
       notes: game.notes || undefined,
     });
 
-    console.log(`[POKER_SMS] Generated SMS message:`, message);
+    const linkMessage = SMSTemplates.pokerConfirmationLink(confirmationUrl);
 
-    // Add message to SMS queue for Mac script to process
+    console.log(`[POKER_SMS] Generated info message:`, infoMessage);
+    console.log(`[POKER_SMS] Generated link message:`, linkMessage);
+
+    // Add both messages to SMS queue for Mac script to process
+    // First message: Game info
     await db.insert(smsQueue).values({
       phoneNumber: user.phone,
-      message,
+      message: infoMessage,
+      notificationId,
+      status: 'pending',
+    });
+
+    // Second message: Just the link (sent after a slight delay)
+    await db.insert(smsQueue).values({
+      phoneNumber: user.phone,
+      message: linkMessage,
       notificationId,
       status: 'pending',
     });
