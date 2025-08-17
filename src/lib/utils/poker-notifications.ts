@@ -13,18 +13,26 @@ export async function sendPokerConfirmationSMS(
 ): Promise<{ success: boolean; notificationId?: number; error?: string }> {
   try {
     // Get game details
-    const game = await db.query.pokerGames.findFirst({
-      where: eq(pokerGames.id, gameId),
-    });
+    const gameResult = await db
+      .select()
+      .from(pokerGames)
+      .where(eq(pokerGames.id, gameId))
+      .limit(1);
+    
+    const game = gameResult[0];
 
     if (!game) {
       return { success: false, error: 'Game not found' };
     }
 
     // Get user details (including phone number)
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, userId),
-    });
+    const userResult = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    
+    const user = userResult[0];
 
     if (!user) {
       return { success: false, error: 'User not found' };
@@ -35,13 +43,17 @@ export async function sendPokerConfirmationSMS(
     }
 
     // Check if we've already sent a confirmation for this game/user
-    const existingNotification = await db.query.notifications.findFirst({
-      where: and(
+    const existingNotificationResult = await db
+      .select()
+      .from(notifications)
+      .where(and(
         eq(notifications.pokerGameId, gameId),
         eq(notifications.userId, userId),
         eq(notifications.type, 'poker_confirmation')
-      ),
-    });
+      ))
+      .limit(1);
+    
+    const existingNotification = existingNotificationResult[0];
 
     if (existingNotification) {
       return { success: false, error: 'Confirmation already sent' };
@@ -66,12 +78,25 @@ export async function sendPokerConfirmationSMS(
     const notificationId = Number(notificationResult.lastInsertRowid);
 
     // Generate SMS message
+    console.log(`[POKER_SMS] Game data for SMS:`, {
+      id: game.id,
+      date: game.date,
+      startTime: game.startTime,
+      blindLevel: game.blindLevel,
+      notes: game.notes,
+      notesType: typeof game.notes,
+      notesLength: game.notes?.length
+    });
+
     const message = SMSTemplates.pokerConfirmation({
       date: game.date,
       startTime: game.startTime,
       blindLevel: game.blindLevel || 'TBD',
       confirmationLink: confirmationUrl,
+      notes: game.notes || undefined,
     });
+
+    console.log(`[POKER_SMS] Generated SMS message:`, message);
 
     // Add message to SMS queue for Mac script to process
     await db.insert(smsQueue).values({
@@ -100,13 +125,17 @@ export async function getPokerConfirmationStatus(
   expiresAt?: Date;
   notificationId?: number;
 }> {
-  const notification = await db.query.notifications.findFirst({
-    where: and(
+  const notificationResult = await db
+    .select()
+    .from(notifications)
+    .where(and(
       eq(notifications.pokerGameId, gameId),
       eq(notifications.userId, userId),
       eq(notifications.type, 'poker_confirmation')
-    ),
-  });
+    ))
+    .limit(1);
+  
+  const notification = notificationResult[0];
 
   if (!notification) {
     return { hasPendingConfirmation: false };
@@ -129,12 +158,16 @@ export async function handlePokerConfirmationResponse(
 ): Promise<{ success: boolean; gameId?: number; userId?: string; error?: string }> {
   try {
     // Find notification by token
-    const notification = await db.query.notifications.findFirst({
-      where: and(
+    const notificationResult = await db
+      .select()
+      .from(notifications)
+      .where(and(
         eq(notifications.confirmationToken, token),
         eq(notifications.type, 'poker_confirmation')
-      ),
-    });
+      ))
+      .limit(1);
+    
+    const notification = notificationResult[0];
 
     if (!notification) {
       return { success: false, error: 'Invalid confirmation token' };
@@ -168,12 +201,16 @@ export async function handlePokerConfirmationResponse(
       .where(eq(notifications.id, notification.id));
 
     // Find and update the corresponding waitlist entry
-    const waitlistEntry = await db.query.pokerWaitlist.findFirst({
-      where: and(
+    const waitlistEntryResult = await db
+      .select()
+      .from(pokerWaitlist)
+      .where(and(
         eq(pokerWaitlist.gameId, gameId),
         eq(pokerWaitlist.userId, userId)
-      ),
-    });
+      ))
+      .limit(1);
+    
+    const waitlistEntry = waitlistEntryResult[0];
 
     if (waitlistEntry) {
       // Update waitlist entry status to match the confirmation response
@@ -184,22 +221,30 @@ export async function handlePokerConfirmationResponse(
       // If confirmed, increment the game's current player count and create reservation
       if (response === 'confirmed') {
         // Get current player count and increment it
-        const currentGame = await db.query.pokerGames.findFirst({
-          where: eq(pokerGames.id, gameId),
-        });
+        const currentGameResult = await db
+          .select()
+          .from(pokerGames)
+          .where(eq(pokerGames.id, gameId))
+          .limit(1);
+        
+        const currentGame = currentGameResult[0];
         
         if (currentGame) {
 
           // Check if a reservation already exists for this user and game to prevent duplicates
-          const existingReservation = await db.query.reservations.findFirst({
-            where: and(
+          const existingReservationResult = await db
+            .select()
+            .from(reservations)
+            .where(and(
               eq(reservations.userId, userId),
               eq(reservations.type, 'poker'),
               eq(reservations.date, currentGame.date),
               eq(reservations.startTime, currentGame.startTime),
               eq(reservations.status, 'confirmed')
-            ),
-          });
+            ))
+            .limit(1);
+          
+          const existingReservation = existingReservationResult[0];
 
           // Only create reservation if one doesn't already exist
           if (!existingReservation) {
@@ -208,7 +253,7 @@ export async function handlePokerConfirmationResponse(
               type: 'poker',
               date: currentGame.date,
               startTime: currentGame.startTime,
-              endTime: currentGame.endTime || currentGame.startTime, // Use startTime as fallback if endTime is null
+              endTime: currentGame.startTime, // Poker games don't have endTime in the schema, use startTime
               partySize: 1, // Poker is always 1 person per reservation
               status: 'confirmed',
               notes: `德州扑克 - 短信确认参加`,
@@ -241,26 +286,41 @@ export async function getConfirmationDetails(token: string): Promise<{
 }> {
   try {
     // Find notification by token
-    const notification = await db.query.notifications.findFirst({
-      where: and(
+    const notificationResult = await db
+      .select()
+      .from(notifications)
+      .where(and(
         eq(notifications.confirmationToken, token),
         eq(notifications.type, 'poker_confirmation')
-      ),
-    });
+      ))
+      .limit(1);
+    
+    const notification = notificationResult[0];
 
     if (!notification) {
       return { success: false, error: 'Invalid confirmation token' };
     }
 
     // Get game details
-    const game = notification.pokerGameId ? await db.query.pokerGames.findFirst({
-      where: eq(pokerGames.id, notification.pokerGameId),
-    }) : null;
+    let game = null;
+    if (notification.pokerGameId) {
+      const gameResult = await db
+        .select()
+        .from(pokerGames)
+        .where(eq(pokerGames.id, notification.pokerGameId))
+        .limit(1);
+      
+      game = gameResult[0];
+    }
 
     // Get user details
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, notification.userId),
-    });
+    const userResult = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, notification.userId))
+      .limit(1);
+    
+    const user = userResult[0];
 
     if (!game || !user) {
       return { success: false, error: 'Game or user not found' };

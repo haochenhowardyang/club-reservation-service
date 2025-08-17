@@ -135,6 +135,7 @@ export async function sendGameNotifications(
           blindLevel: game.blindLevel || 'TBD',
           joinUrl: tokenResult.joinUrl,
           customMessage,
+          notes: game.notes || undefined,
         });
 
         // Queue SMS
@@ -177,13 +178,14 @@ export function generateGameNotificationSMS(params: {
   blindLevel: string;
   joinUrl: string;
   customMessage?: string;
+  notes?: string;
 }): string {
-  const { playerName, date, startTime, blindLevel, joinUrl, customMessage } = params;
+  const { playerName, date, startTime, blindLevel, joinUrl, customMessage, notes } = params;
 
   // Use Chinese date/time formatting
   const chineseDateTimeFormatted = formatChineseDateTimeForSMS(date, startTime);
 
-  const baseMessage = `🎰 最新德州扑克开放Waitlist啦
+  let baseMessage = `🎰 最新德州扑克开放Waitlist啦
 
 Hi ${playerName}!
 
@@ -191,6 +193,11 @@ Hi ${playerName}!
 
 📅 日期：${chineseDateTimeFormatted}
 💰 盲注：${blindLevel}`;
+
+  // Add notes section if notes exist
+  if (notes && notes.trim()) {
+    baseMessage += `\n📝 备注：${notes.trim()}`;
+  }
 
   const customPart = customMessage ? `\n\n${customMessage}` : '';
 

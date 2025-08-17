@@ -41,16 +41,23 @@ export const SMSTemplates = {
     startTime: string;
     blindLevel: string;
     confirmationLink: string;
+    notes?: string;
   }) => {
     const chineseDateTimeFormatted = formatChineseDateTimeForSMS(gameDetails.date, gameDetails.startTime);
 
-    return `🎰 恭喜您已被邀请加入德州扑克牌局
+    let message = `🎰 恭喜您已被邀请加入德州扑克牌局
 
 📅 日期：${chineseDateTimeFormatted}
-💰 盲注：${gameDetails.blindLevel}
+💰 盲注：${gameDetails.blindLevel}`;
 
-请在四小时内接受或拒绝邀请:
-${gameDetails.confirmationLink}`;
+    // Add notes section if notes exist
+    if (gameDetails.notes && gameDetails.notes.trim()) {
+      message += `\n📝 备注：${gameDetails.notes.trim()}`;
+    }
+
+    message += `\n\n请在四小时内接受或拒绝邀请:\n${gameDetails.confirmationLink}`;
+
+    return message;
   },
 
   pokerReminder: (gameDetails: {
