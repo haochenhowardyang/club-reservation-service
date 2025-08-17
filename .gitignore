@@ -42,3 +42,6 @@ sqlite.db
 
 # Allow data directory structure but ignore contents
 !data/.gitkeep
+
+# Deployment scripts with secrets
+scripts/deployment/deploy.sh
