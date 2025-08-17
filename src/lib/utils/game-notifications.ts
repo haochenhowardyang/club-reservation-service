@@ -198,7 +198,7 @@ export function generateGameNotificationSMS(params: {
 
   let baseMessage = `🎰 最新德州扑克开放Waitlist啦
 
-Hi ${playerName}!
+Hi${playerName ? ' ' + playerName : ''}!
 
 抢先加入Waitlist，Lucky Poker Best Poker！
 

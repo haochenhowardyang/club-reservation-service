@@ -198,7 +198,7 @@ export default function PokerPlayersContent() {
         throw new Error(errorData.message || 'Failed to add player');
       }
 
-      alert(`${selectedUser.name} has been added to the poker players list!`);
+      alert(`${selectedUser.name || selectedUser.email} has been added to the poker players list!`);
       setShowAddPlayerModal(false);
       setSearchQuery('');
       setSearchResults([]);
@@ -400,7 +400,7 @@ export default function PokerPlayersContent() {
                   <div className="flex-shrink-0 h-10 w-10">
                     <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
                       <span className="text-sm font-medium text-gray-700">
-                        {player.user.name.charAt(0).toUpperCase()}
+                        {player.user.name ? player.user.name.charAt(0).toUpperCase() : player.user.email.charAt(0).toUpperCase()}
                       </span>
                     </div>
                   </div>
@@ -532,7 +532,7 @@ export default function PokerPlayersContent() {
                       key={user.id}
                       onClick={() => {
                         setSelectedUser(user);
-                        setSearchQuery(user.name);
+                        setSearchQuery(user.name || user.email);
                         setSearchResults([]);
                       }}
                       className={`p-3 cursor-pointer hover:bg-gray-50 border-b border-gray-100 last:border-b-0 ${
@@ -543,7 +543,7 @@ export default function PokerPlayersContent() {
                         <div className="flex-shrink-0 h-8 w-8">
                           <div className="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center">
                             <span className="text-xs font-medium text-gray-700">
-                              {user.name.charAt(0).toUpperCase()}
+                              {user.name ? user.name.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
                             </span>
                           </div>
                         </div>
@@ -567,7 +567,7 @@ export default function PokerPlayersContent() {
                     <div className="flex-shrink-0 h-10 w-10">
                       <div className="h-10 w-10 rounded-full bg-green-300 flex items-center justify-center">
                         <span className="text-sm font-medium text-green-700">
-                          {selectedUser.name.charAt(0).toUpperCase()}
+                          {selectedUser.name ? selectedUser.name.charAt(0).toUpperCase() : selectedUser.email.charAt(0).toUpperCase()}
                         </span>
                       </div>
                     </div>

@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { users, pokerPlayers } from "@/lib/db/schema";
-import { eq, and, like, notInArray, or } from "drizzle-orm";
+import { eq, and, like, notInArray, or, isNotNull } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
   try {
@@ -34,9 +34,9 @@ export async function GET(request: NextRequest) {
           notInArray(users.id, existingUserIds),
           query ? 
             or(
-              like(users.name, `%${query}%`),
+              and(isNotNull(users.name), like(users.name, `%${query}%`)),
               like(users.email, `%${query}%`),
-              like(users.phone, `%${query}%`)
+              and(isNotNull(users.phone), like(users.phone, `%${query}%`))
             ) : 
             undefined
         ),
@@ -48,9 +48,9 @@ export async function GET(request: NextRequest) {
       availableUsers = await db.query.users.findMany({
         where: query ? 
           or(
-            like(users.name, `%${query}%`),
+            and(isNotNull(users.name), like(users.name, `%${query}%`)),
             like(users.email, `%${query}%`),
-            like(users.phone, `%${query}%`)
+            and(isNotNull(users.phone), like(users.phone, `%${query}%`))
           ) : 
           undefined,
         limit: 20,
