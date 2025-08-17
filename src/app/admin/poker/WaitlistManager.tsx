@@ -375,12 +375,12 @@ export default function WaitlistManager({ gameId, onClose, onPlayerConfirmed }: 
                           <div className="flex-shrink-0 h-10 w-10">
                             <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
                               <span className="text-sm font-medium text-gray-700">
-                                {entry.user.name.charAt(0).toUpperCase()}
+                                {entry.user.name ? entry.user.name.charAt(0).toUpperCase() : entry.user.email.charAt(0).toUpperCase()}
                               </span>
                             </div>
                           </div>
                           <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">{entry.user.name}</div>
+                            <div className="text-sm font-medium text-gray-900">{entry.user.name || entry.user.email}</div>
                             <div className="text-sm text-gray-500">
                               {entry.user.strikes > 0 && (
                                 <span className="text-red-600">

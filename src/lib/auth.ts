@@ -51,29 +51,47 @@ export const authOptions: NextAuthOptions = {
           const oldId = existingMainUser[0].id;
           const shouldUpdateName = !existingMainUser[0].name && user.name;
           
+          // Only set name if Google provides one or user already has one - no email fallback
+          const nameToSet = shouldUpdateName ? user.name! : existingMainUser[0].name;
+          
+          const updateData: any = {
+            id: user.id, // Use the NextAuth ID
+            image: user.image || existingMainUser[0].image, // Update image from Google if available
+            updatedAt: new Date()
+          };
+          
+          // Only set name if it's not null
+          if (nameToSet !== null) {
+            updateData.name = nameToSet;
+          }
+          
           await db
             .update(mainUsers)
-            .set({ 
-              id: user.id, // Use the NextAuth ID
-              name: shouldUpdateName ? user.name : existingMainUser[0].name, // Fill name from Google if empty
-              image: user.image || existingMainUser[0].image, // Update image from Google if available
-              updatedAt: new Date()
-            })
+            .set(updateData)
             .where(eq(mainUsers.id, oldId));
           
           if (shouldUpdateName) {
             console.log(`[AUTH] 📝 Filled empty name from Google: ${user.name}`);
+          } else if (!existingMainUser[0].name) {
+            console.log(`[AUTH] 📝 Keeping name as null - no Google name provided`);
           }
           
           // Update auth table with additional info from main table
+          const authUpdateData: any = {
+            phone: existingMainUser[0].phone,
+            role: existingMainUser[0].role,
+            strikes: existingMainUser[0].strikes,
+            isActive: existingMainUser[0].isActive
+          };
+          
+          // Only set name in auth table if it's not null
+          if (nameToSet !== null) {
+            authUpdateData.name = nameToSet;
+          }
+          
           await db
             .update(authUsers)
-            .set({
-              phone: existingMainUser[0].phone,
-              role: existingMainUser[0].role,
-              strikes: existingMainUser[0].strikes,
-              isActive: existingMainUser[0].isActive
-            })
+            .set(authUpdateData)
             .where(eq(authUsers.id, user.id));
           
           console.log(`[AUTH] ✅ Synchronized both tables - using NextAuth ID: ${user.id}`);
@@ -93,7 +111,7 @@ export const authOptions: NextAuthOptions = {
         await db.insert(mainUsers).values({
           id: user.id,
           email: user.email!.toLowerCase(),
-          name: user.name || user.email!.split('@')[0],
+          name: user.name || null, // Only use Google name, no email fallback
           image: user.image,
           role: user.email === 'haochenhowardyang@gmail.com' ? 'admin' : 'user',
           strikes: 0,
@@ -169,6 +187,51 @@ export const authOptions: NextAuthOptions = {
       } else {
         console.log(`[AUTH] ❌ No email provided - blocking sign-in`);
         return false;
+      }
+      
+      // For existing users, check if we need to update their name
+      if (user.name) {
+        try {
+          const { users: mainUsers } = await import('./db/schema');
+          
+          // Check if user exists in main table but has no name
+          const existingUser = await db
+            .select()
+            .from(mainUsers)
+            .where(eq(mainUsers.email, user.email.toLowerCase()))
+            .limit(1);
+          
+          if (existingUser.length > 0 && !existingUser[0].name) {
+            console.log(`[AUTH] 🔧 Existing user ${user.email} has no name, updating with Google name: ${user.name}`);
+            
+            // Update main table with Google name
+            await db
+              .update(mainUsers)
+              .set({ 
+                name: user.name,
+                updatedAt: new Date()
+              })
+              .where(eq(mainUsers.email, user.email.toLowerCase()));
+            
+            // Also update auth table if the user exists there
+            const existingAuthUser = await db
+              .select()
+              .from(authUsers)
+              .where(eq(authUsers.email, user.email.toLowerCase()))
+              .limit(1);
+            
+            if (existingAuthUser.length > 0) {
+              await db
+                .update(authUsers)
+                .set({ name: user.name })
+                .where(eq(authUsers.email, user.email.toLowerCase()));
+            }
+            
+            console.log(`[AUTH] ✅ Updated name for existing user: ${user.email}`);
+          }
+        } catch (error) {
+          console.error(`[AUTH] Error updating existing user name:`, error);
+        }
       }
       
       console.log(`[AUTH] ✅ Sign-in approved for ${user.email} - createUser event should handle user creation`);

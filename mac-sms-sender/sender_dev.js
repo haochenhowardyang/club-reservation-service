@@ -7,7 +7,6 @@ import cron from 'node-cron';
 // Configuration
 const CONFIG = {
   // Your website URL (change this to your actual domain when deployed)
-  // WEBSITE_URL:"https://tipsyclub.org",
   WEBSITE_URL: "http://localhost:3000",
 
   // Secret token for authentication (hard coded)

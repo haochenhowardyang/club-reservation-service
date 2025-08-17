@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
+import { users as authUsers } from "@/lib/db/auth-schema";
+import { desc, eq } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,12 +18,51 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get all users
-    const allUsers = await db.query.users.findMany({
-      orderBy: (users, { desc }) => [desc(users.createdAt)],
-    });
+    // Get all users from main table
+    const allUsers = await db
+      .select()
+      .from(users)
+      .orderBy(desc(users.createdAt));
 
-    return NextResponse.json(allUsers);
+    // For each user, try to get their name from multiple sources
+    const usersWithNames = await Promise.all(
+      allUsers.map(async (user) => {
+        let userName = user.name; // First try main table name
+        
+        // If no name in main table, try auth table by ID
+        if (!userName) {
+          const authUserById = await db
+            .select({ name: authUsers.name })
+            .from(authUsers)
+            .where(eq(authUsers.id, user.id))
+            .limit(1);
+          
+          if (authUserById.length > 0 && authUserById[0].name) {
+            userName = authUserById[0].name;
+          }
+        }
+        
+        // If still no name, try auth table by email (fallback)
+        if (!userName) {
+          const authUserByEmail = await db
+            .select({ name: authUsers.name })
+            .from(authUsers)
+            .where(eq(authUsers.email, user.email.toLowerCase()))
+            .limit(1);
+          
+          if (authUserByEmail.length > 0 && authUserByEmail[0].name) {
+            userName = authUserByEmail[0].name;
+          }
+        }
+        
+        return {
+          ...user,
+          name: userName || null
+        };
+      })
+    );
+
+    return NextResponse.json(usersWithNames);
   } catch (error) {
     console.error("Error fetching users:", error);
     return NextResponse.json(
