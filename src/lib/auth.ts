@@ -45,19 +45,25 @@ export const authOptions: NextAuthOptions = {
           console.log(`[AUTH] 🔄 Found existing user in main table: ${user.email}`);
           console.log(`[AUTH] Existing main table ID: ${existingMainUser[0].id}, NextAuth ID: ${user.id}`);
           
-          // Update main table to use NextAuth ID for consistency
-          console.log(`[AUTH] 🔧 Updating main table user to use NextAuth ID`);
+          // Update main table to use NextAuth ID for consistency and fill in name from Google
+          console.log(`[AUTH] 🔧 Updating main table user to use NextAuth ID and Google name`);
           
           const oldId = existingMainUser[0].id;
+          const shouldUpdateName = !existingMainUser[0].name && user.name;
           
           await db
             .update(mainUsers)
             .set({ 
               id: user.id, // Use the NextAuth ID
+              name: shouldUpdateName ? user.name : existingMainUser[0].name, // Fill name from Google if empty
               image: user.image || existingMainUser[0].image, // Update image from Google if available
               updatedAt: new Date()
             })
             .where(eq(mainUsers.id, oldId));
+          
+          if (shouldUpdateName) {
+            console.log(`[AUTH] 📝 Filled empty name from Google: ${user.name}`);
+          }
           
           // Update auth table with additional info from main table
           await db

@@ -36,16 +36,16 @@ export async function createUserFromWhitelist(options: CreateUserOptions): Promi
     
     // Generate unique user ID
     const userId = randomUUID();
-    const defaultName = name || email.split('@')[0];
     const currentTime = new Date();
     
     console.log(`[USER_CREATION] Generated user ID: ${userId} for ${email}`);
     
     // Create user ONLY in main users table - let NextAuth handle auth tables on sign-in
+    // Leave name null if not explicitly provided - will be filled from Google OAuth on first login
     await db.insert(users).values({
       id: userId,
       email: email.toLowerCase(),
-      name: defaultName,
+      name: name || null, // Use provided name or null (no email prefix fallback)
       image: image || null,
       phone: phone || null,
       role,
@@ -93,7 +93,7 @@ export async function createUserFromWhitelist(options: CreateUserOptions): Promi
   }
 }
 
-export async function getUserByEmail(email: string): Promise<{ id: string; email: string; name: string } | null> {
+export async function getUserByEmail(email: string): Promise<{ id: string; email: string; name: string | null } | null> {
   try {
     // First try main users table
     const mainUserResult = await db

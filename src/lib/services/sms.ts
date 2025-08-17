@@ -5,33 +5,6 @@ export interface SMSMessage {
   message: string;
 }
 
-
-/**
- * Format phone number for Twilio (ensure proper format)
- */
-function formatPhoneNumber(phone: string): string {
-  // Remove all non-digit characters
-  const digits = phone.replace(/\D/g, '');
-  
-  // If it's a 10-digit US number, add +1
-  if (digits.length === 10) {
-    return `+1${digits}`;
-  }
-  
-  // If it already has country code, ensure it starts with +
-  if (digits.length === 11 && digits.startsWith('1')) {
-    return `+${digits}`;
-  }
-  
-  // If it already starts with +, return as is
-  if (phone.startsWith('+')) {
-    return phone;
-  }
-  
-  // Default: assume it's a US number and add +1
-  return `+1${digits}`;
-}
-
 /**
  * Generate SMS message templates
  */

@@ -5,7 +5,7 @@ import { relations, sql } from 'drizzle-orm';
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
   email: text('email').notNull().unique(),
-  name: text('name').notNull(),
+  name: text('name'), // Made optional - will be filled from Google OAuth on first login
   image: text('image'),
   phone: text('phone'), // Optional phone number
   role: text('role', { enum: ['user', 'admin'] }).notNull().default('user'),
