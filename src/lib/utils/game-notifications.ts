@@ -34,14 +34,14 @@ export function generateWaitlistJoinUrl(token: string): string {
  */
 export async function createGameNotificationTokens(
   gameId: number,
-  userIds: string[],
+  userEmails: string[],
   gameDate: string,
   gameStartTime: string
-): Promise<{ userId: string; token: string; joinUrl: string }[]> {
+): Promise<{ userEmail: string; token: string; joinUrl: string }[]> {
   const results = [];
   const expiresAt = generateGameNotificationExpiry(gameDate, gameStartTime);
 
-  for (const userId of userIds) {
+  for (const userEmail of userEmails) {
     const token = generateGameNotificationToken();
     const joinUrl = generateWaitlistJoinUrl(token);
 
@@ -49,13 +49,13 @@ export async function createGameNotificationTokens(
     await db.insert(gameNotificationTokens).values({
       token,
       gameId,
-      userId,
+      userEmail,
       type: 'game_notification',
       status: 'pending',
       expiresAt,
     });
 
-    results.push({ userId, token, joinUrl });
+    results.push({ userEmail, token, joinUrl });
   }
 
   return results;
@@ -66,7 +66,7 @@ export async function createGameNotificationTokens(
  */
 export async function sendGameNotifications(
   gameId: number,
-  userIds: string[],
+  userEmails: string[],
   customMessage?: string
 ): Promise<{ success: boolean; sentCount: number; errors: string[] }> {
   try {
@@ -82,45 +82,35 @@ export async function sendGameNotifications(
       return { success: false, sentCount: 0, errors: ['Game not found'] };
     }
 
-    // Get poker players with user details
-    const playersToNotify = await db.query.pokerPlayers.findMany({
-      where: and(
-        eq(pokerPlayers.userId, userIds[0]) // This will be updated in a loop
-      ),
-      with: {
-        user: true,
-      },
-    });
-
     // Create notification tokens
-    const tokenResults = await createGameNotificationTokens(gameId, userIds, game.date, game.startTime);
+    const tokenResults = await createGameNotificationTokens(gameId, userEmails, game.date, game.startTime);
 
     // Process each player
-    for (const userId of userIds) {
+    for (const userEmail of userEmails) {
       try {
         // Get player details
         const player = await db.query.pokerPlayers.findFirst({
-          where: eq(pokerPlayers.userId, userId),
+          where: eq(pokerPlayers.userEmail, userEmail),
           with: {
             user: true,
           },
         });
 
         if (!player || !player.user.phone) {
-          errors.push(`Player ${userId} not found or has no phone number`);
+          errors.push(`Player ${userEmail} not found or has no phone number`);
           continue;
         }
 
         // Find the token for this user
-        const tokenResult = tokenResults.find(t => t.userId === userId);
+        const tokenResult = tokenResults.find(t => t.userEmail === userEmail);
         if (!tokenResult) {
-          errors.push(`Failed to create token for user ${userId}`);
+          errors.push(`Failed to create token for user ${userEmail}`);
           continue;
         }
 
         // Create notification record
         const notification = await db.insert(notifications).values({
-          userId,
+          userEmail,
           pokerGameId: gameId,
           type: 'poker_invitation',
           method: 'sms',
@@ -159,8 +149,8 @@ export async function sendGameNotifications(
 
         sentCount++;
       } catch (error) {
-        console.error(`Error processing notification for user ${userId}:`, error);
-        errors.push(`Failed to process notification for user ${userId}`);
+        console.error(`Error processing notification for user ${userEmail}:`, error);
+        errors.push(`Failed to process notification for user ${userEmail}`);
       }
     }
 
@@ -287,7 +277,7 @@ export async function processTokenToJoinWaitlist(token: string) {
     const existingEntry = await db.query.pokerWaitlist.findFirst({
       where: and(
         eq(pokerWaitlist.gameId, game.id),
-        eq(pokerWaitlist.userId, user.id)
+        eq(pokerWaitlist.userEmail, user.email)
       ),
     });
 
@@ -309,7 +299,7 @@ export async function processTokenToJoinWaitlist(token: string) {
     // Add to waitlist
     await db.insert(pokerWaitlist).values({
       gameId: game.id,
-      userId: user.id,
+      userEmail: user.email,
       position,
       status: 'waiting',
     });

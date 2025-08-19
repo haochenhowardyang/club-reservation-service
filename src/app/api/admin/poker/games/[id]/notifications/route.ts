@@ -51,17 +51,17 @@ export async function GET(
     const playersWithStatus = players.map(player => {
       // Check if this player has been sent a notification for this game
       const hasNotification = gameNotifications.some(
-        notification => notification.userId === player.userId
+        notification => notification.userEmail === player.userEmail
       );
 
       // Check if this player has a token for this game
       const hasToken = gameTokens.some(
-        token => token.userId === player.userId
+        token => token.userEmail === player.userEmail
       );
 
       // Get the most recent notification status
       const latestNotification = gameNotifications
-        .filter(notification => notification.userId === player.userId)
+        .filter(notification => notification.userEmail === player.userEmail)
         .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0))[0];
 
       return {

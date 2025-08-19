@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
       user: users,
     })
     .from(pokerWaitlist)
-    .innerJoin(users, eq(pokerWaitlist.userId, users.id))
+    .innerJoin(users, eq(pokerWaitlist.userEmail, users.email))
     .where(eq(pokerWaitlist.gameId, gameId))
     .orderBy(pokerWaitlist.position);
 
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
         const notificationResults = await db.select()
           .from(notifications)
           .where(and(
-            eq(notifications.userId, entry.user.id),
+            eq(notifications.userEmail, entry.user.email),
             eq(notifications.pokerGameId, gameId),
             eq(notifications.type, 'poker_confirmation')
           ))
@@ -87,9 +87,8 @@ export async function GET(request: NextRequest) {
           createdAt: entry.waitlist.createdAt,
           updatedAt: entry.waitlist.updatedAt,
           user: {
-            id: entry.user.id,
-            name: entry.user.name,
             email: entry.user.email,
+            name: entry.user.name,
             phone: entry.user.phone,
             strikes: entry.user.strikes,
             isActive: entry.user.isActive,

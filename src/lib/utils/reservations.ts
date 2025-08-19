@@ -11,7 +11,7 @@ import { getCurrentEDT, isWithinBookingWindow, isReservationInPast } from './tim
  * Returns the reservation ID if successful, null if the slot is not available
  */
 export async function createReservation(
-  userId: string,
+  userEmail: string,
   date: string,
   startTime: string,
   roomType: 'bar' | 'mahjong' | 'poker',
@@ -19,26 +19,26 @@ export async function createReservation(
   notes?: string,
   endTime?: string
 ): Promise<{ id: number; waitlisted: boolean } | null> {
-  console.log(`[RESERVATION] Creating reservation for userId: ${userId}, date: ${date}, startTime: ${startTime}, type: ${roomType}`);
+  console.log(`[RESERVATION] Creating reservation for userEmail: ${userEmail}, date: ${date}, startTime: ${startTime}, type: ${roomType}`);
   
   // Add comprehensive user validation with detailed logging
-  console.log(`[RESERVATION] Checking if user ${userId} exists in main users table...`);
+  console.log(`[RESERVATION] Checking if user ${userEmail} exists in main users table...`);
   
   try {
     const { users } = await import('../db/schema');
     const userExists = await db.query.users.findFirst({
-      where: (users, { eq }) => eq(users.id, userId),
+      where: (users, { eq }) => eq(users.email, userEmail),
     });
     
     if (!userExists) {
-      console.error(`[RESERVATION] ❌ CRITICAL: User ${userId} NOT FOUND in main users table`);
+      console.error(`[RESERVATION] ❌ CRITICAL: User ${userEmail} NOT FOUND in main users table`);
       console.log(`[RESERVATION] This will cause FOREIGN KEY constraint failure`);
       
       // Check if user exists in NextAuth tables
-      console.log(`[RESERVATION] Checking NextAuth tables for user ${userId}...`);
+      console.log(`[RESERVATION] Checking NextAuth tables for user ${userEmail}...`);
       try {
         const authUser = await db.query.users.findFirst({
-          where: (users, { eq }) => eq(users.id, userId),
+          where: (users, { eq }) => eq(users.email, userEmail),
         });
         console.log(`[RESERVATION] NextAuth user check result:`, authUser ? 'FOUND' : 'NOT_FOUND');
         
@@ -54,10 +54,10 @@ export async function createReservation(
       }
       
       // Throw descriptive error
-      throw new Error(`User ${userId} not found in main users table. This indicates a user synchronization issue between NextAuth and the main application database.`);
+      throw new Error(`User ${userEmail} not found in main users table. This indicates a user synchronization issue between NextAuth and the main application database.`);
     }
     
-    console.log(`[RESERVATION] ✅ User validation passed for ${userId}`);
+    console.log(`[RESERVATION] ✅ User validation passed for ${userEmail}`);
     console.log(`[RESERVATION] User details:`, {
       id: userExists.id,
       email: userExists.email,
@@ -110,13 +110,13 @@ export async function createReservation(
   
   // If slot is not available, add to waitlist
   if (!isAvailable) {
-    const position = await addToWaitlist(userId, date, startTime, roomType, partySize, notes);
+    const position = await addToWaitlist(userEmail, date, startTime, roomType, partySize, notes);
     console.log(`Added to waitlist at position ${position} for ${date} ${startTime} ${roomType}`);
     
     // Return the reservation ID with waitlisted flag
     const waitlistedReservation = await db.query.reservations.findFirst({
       where: and(
-        eq(reservations.userId, userId),
+        eq(reservations.userEmail, userEmail),
         eq(reservations.date, date),
         eq(reservations.startTime, startTime),
         eq(reservations.type, roomType),
@@ -136,7 +136,7 @@ export async function createReservation(
   console.log(`[RESERVATION] 🔄 Attempting to insert reservation into database...`);
   
   const reservationData = {
-    userId,
+    userEmail: userEmail,
     date,
     startTime,
     endTime: calculatedEndTime,
@@ -153,7 +153,7 @@ export async function createReservation(
   try {
     const { users } = await import('../db/schema');
     const finalUserCheck = await db.query.users.findFirst({
-      where: (users, { eq }) => eq(users.id, userId),
+      where: (users, { eq }) => eq(users.email, userEmail),
     });
     
     console.log(`[RESERVATION] Final user check result:`, finalUserCheck ? 'USER_FOUND' : 'USER_NOT_FOUND');
@@ -312,9 +312,9 @@ export async function cancelReservation(
 /**
  * Get all reservations for a specific user
  */
-export async function getUserReservations(userId: string) {
+export async function getUserReservations(userEmail: string) {
   return db.query.reservations.findMany({
-    where: eq(reservations.userId, userId),
+    where: eq(reservations.userEmail, userEmail),
     orderBy: [asc(reservations.date), asc(reservations.startTime)],
   });
 }

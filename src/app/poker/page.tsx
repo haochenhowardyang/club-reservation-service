@@ -29,7 +29,7 @@ export default async function PokerPage() {
   // For each game, check if user is on waitlist
   const gamesWithWaitlistInfo = await Promise.all(
     games.map(async (game) => {
-      const position = await getPokerWaitlistPosition(game.id, session.user.id);
+      const position = await getPokerWaitlistPosition(game.id, session.user.email!);
       return {
         ...game,
         userWaitlistPosition: position,

@@ -20,18 +20,18 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const query = searchParams.get('q') || '';
 
-    // Get all user IDs that are already in poker players list
+    // Get all user emails that are already in poker players list
     const existingPokerPlayers = await db.query.pokerPlayers.findMany({
-      columns: { userId: true }
+      columns: { userEmail: true }
     });
-    const existingUserIds = existingPokerPlayers.map(p => p.userId);
+    const existingUserEmails = existingPokerPlayers.map(p => p.userEmail);
 
     // Search for users not in poker players list
     let availableUsers;
-    if (existingUserIds.length > 0) {
+    if (existingUserEmails.length > 0) {
       availableUsers = await db.query.users.findMany({
         where: and(
-          notInArray(users.id, existingUserIds),
+          notInArray(users.email, existingUserEmails),
           query ? 
             or(
               and(isNotNull(users.name), like(users.name, `%${query}%`)),

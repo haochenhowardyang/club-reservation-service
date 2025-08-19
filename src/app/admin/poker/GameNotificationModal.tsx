@@ -15,12 +15,11 @@ interface PokerGame {
 
 interface PokerPlayer {
   id: number;
-  userId: string;
+  userEmail: string;
   marketingOptIn: boolean;
   user: {
-    id: string;
-    name: string;
     email: string;
+    name: string;
     phone: string | null;
   };
   notificationStatus?: {
@@ -80,7 +79,7 @@ export default function GameNotificationModal({ gameId, onClose, onNotifications
       // Auto-select players who haven't been notified yet (default filter)
       const unnotifiedPlayers = eligiblePlayers
         .filter((player: PokerPlayer) => !player.notificationStatus?.hasBeenNotified)
-        .map((player: PokerPlayer) => player.userId);
+        .map((player: PokerPlayer) => player.userEmail);
       setSelectedPlayers(unnotifiedPlayers);
       
     } catch (err) {
@@ -103,7 +102,7 @@ export default function GameNotificationModal({ gameId, onClose, onNotifications
     if (selectedPlayers.length === filteredPlayers.length) {
       setSelectedPlayers([]);
     } else {
-      setSelectedPlayers(filteredPlayers.map(p => p.userId));
+      setSelectedPlayers(filteredPlayers.map(p => p.userEmail));
     }
   };
 
@@ -280,12 +279,12 @@ export default function GameNotificationModal({ gameId, onClose, onNotifications
               ) : (
                 <div className="divide-y divide-gray-200">
                   {filteredPlayers.map((player) => (
-                    <div key={player.userId} className="p-3 hover:bg-gray-50">
+                    <div key={player.userEmail} className="p-3 hover:bg-gray-50">
                       <div className="flex items-center">
                         <input
                           type="checkbox"
-                          checked={selectedPlayers.includes(player.userId)}
-                          onChange={(e) => handlePlayerSelection(player.userId, e.target.checked)}
+                          checked={selectedPlayers.includes(player.userEmail)}
+                          onChange={(e) => handlePlayerSelection(player.userEmail, e.target.checked)}
                           className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                         />
                         <div className="ml-3 flex-1">

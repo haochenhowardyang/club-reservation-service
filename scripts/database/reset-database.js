@@ -24,8 +24,8 @@ const colors = {
 const log = (color, message) => console.log(`${colors[color]}${message}${colors.reset}`);
 
 // Configuration
-const projectRoot = path.join(__dirname, '..');
-const migrationFile = path.join(projectRoot, 'drizzle', '0000_initial_schema.sql');
+const projectRoot = path.join(__dirname, '..', '..'); // Go up two levels from scripts/database/
+const migrationFile = path.join(projectRoot, 'drizzle', '0005_consolidated_email_schema.sql');
 
 // Determine database path based on environment
 const getDatabasePath = () => {
@@ -70,8 +70,8 @@ async function resetDatabase() {
   
   // Step 1: Verify migration file exists
   if (!fs.existsSync(migrationFile)) {
-    log('red', '❌ Migration file not found: drizzle/0000_initial_schema.sql');
-    log('yellow', '💡 Make sure you have consolidated your migrations first');
+    log('red', '❌ Migration file not found: drizzle/0005_consolidated_email_schema.sql');
+    log('yellow', '💡 Make sure you have the correct email-based schema file');
     process.exit(1);
   }
 
@@ -197,8 +197,9 @@ async function resetDatabase() {
     log('blue', `👤 Adding admin user to whitelist: ${adminEmail}`);
     
     try {
-      const insertStmt = db.prepare('INSERT INTO email_whitelist (email, created_at) VALUES (?, ?)');
-      insertStmt.run(adminEmail, Date.now());
+      const now = Date.now();
+      const insertStmt = db.prepare('INSERT INTO email_whitelist (email, created_at, updated_at) VALUES (?, ?, ?)');
+      insertStmt.run(adminEmail, now, now);
       log('green', `✅ Added ${adminEmail} to whitelist`);
     } catch (insertError) {
       if (insertError.message.includes('UNIQUE constraint failed')) {
@@ -224,7 +225,7 @@ async function resetDatabase() {
     console.log('\n📋 Summary:');
     console.log(`  • Environment: ${isProduction ? 'Production/Volume' : 'Local Development'}`);
     console.log(`  • Database: ${dbPath}`);
-    console.log(`  • Schema: Fresh from drizzle/0000_initial_schema.sql`);
+    console.log(`  • Schema: Fresh from drizzle/0005_consolidated_email_schema.sql (Gmail-based IDs)`);
     console.log(`  • Admin user: ${adminEmail} (whitelisted)`);
     
     if (isVolumeEnvironment) {

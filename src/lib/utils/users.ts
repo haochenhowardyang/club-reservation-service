@@ -46,7 +46,94 @@ export async function ensureUserExists(userId: string): Promise<boolean> {
         return false;
       }
       
-      console.log(`Found user ${userId} in NextAuth user table, copying to users table...`);
+      console.log(`Found user ${userId} in NextAuth user table`);
+      
+      // CRITICAL: Check if a user with the same email already exists in main table
+      const existingUserByEmail = sqlite.prepare('SELECT * FROM users WHERE email = ?').get(userInUserTable.email) as Record<string, any> | undefined;
+      
+      if (existingUserByEmail) {
+        console.log(`User with email ${userInUserTable.email} already exists in main table with different ID: ${existingUserByEmail.id}`);
+        
+        if (existingUserByEmail.id !== userId) {
+          console.log(`ID mismatch detected - existing: ${existingUserByEmail.id}, NextAuth: ${userId}`);
+          console.log(`This requires foreign key migration - migrating references FIRST to avoid constraint violations`);
+          
+          const oldUserId = existingUserByEmail.id;
+          
+          // Close the direct SQLite connection to allow Drizzle ORM to work
+          sqlite.close();
+          
+          try {
+            // STEP 1: Migrate all foreign key references FIRST (using Drizzle ORM)
+            const { migrateForeignKeyReferences } = require('./user-migration');
+            console.log(`Performing foreign key migration from ${oldUserId} to ${userId}...`);
+            
+            const migrationResult = await migrateForeignKeyReferences(oldUserId, userId);
+            console.log(`Migration completed:`, migrationResult.success ? 'SUCCESS' : 'PARTIAL');
+            
+            if (!migrationResult.success) {
+              console.error(`Migration errors:`, migrationResult.errors);
+              // Continue with user update even if some migrations failed
+            }
+            
+            console.log(`Migration summary:`, migrationResult.migratedCounts);
+            
+          } catch (migrationError) {
+            console.error(`Migration failed:`, migrationError);
+            // Continue with user update even if migration failed
+          }
+          
+          // STEP 2: Now update the user ID in main table (reopen SQLite connection)
+          const sqlite2 = new Database(dbPath);
+          
+          try {
+            sqlite2.pragma('foreign_keys = ON');
+            
+            console.log(`Now updating user record from ID ${oldUserId} to ${userId}...`);
+            
+            const updateStmt = sqlite2.prepare(`
+              UPDATE users 
+              SET id = ?, name = ?, image = ?, updated_at = ?
+              WHERE email = ?
+            `);
+            
+            const nameToUse = userInUserTable.name || existingUserByEmail.name;
+            
+            updateStmt.run(
+              userId,
+              nameToUse,
+              userInUserTable.image,
+              Date.now(),
+              userInUserTable.email
+            );
+            
+            console.log(`Successfully updated user record from ${oldUserId} to ${userId}`);
+            
+            // Verify the update
+            const verifyUpdate = sqlite2.prepare('SELECT 1 FROM users WHERE id = ?').get(userId);
+            
+            if (!verifyUpdate) {
+              console.error(`Failed to verify user update to ${userId}`);
+              return false;
+            }
+            
+            console.log(`User ID migration completed successfully: ${oldUserId} -> ${userId}`);
+            
+            return true;
+            
+          } catch (updateError) {
+            console.error(`Error updating user ID:`, updateError);
+            return false;
+          } finally {
+            sqlite2.close();
+          }
+        } else {
+          console.log(`User ${userId} already exists with correct ID in main table`);
+          return true;
+        }
+      }
+      
+      console.log(`No existing user found by email, creating new user ${userId} in users table...`);
       
       // Determine the role (must be one of the enum values)
       const userRole: 'user' | 'admin' = userInUserTable.role === 'admin' ? 'admin' : 'user';
@@ -112,7 +199,5 @@ export async function ensureUserExists(userId: string): Promise<boolean> {
  * Get a user by ID
  */
 export async function getUserById(userId: string) {
-  return db.query.users.findFirst({
-    where: eq(users.id, userId)
-  });
+  return db.select().from(users).where(eq(users.id, userId)).limit(1);
 }

@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { confirmPokerPlayer } from "@/lib/utils/poker";
 import { db } from "@/lib/db";
-import { reservations } from "@/lib/db/schema";
+import { reservations, pokerGames } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 
 export async function POST(request: NextRequest) {
@@ -43,15 +43,15 @@ export async function POST(request: NextRequest) {
 
     const { userId } = await request.json();
 
-    // Validate user ID
+    // Validate user email (API still receives userId param name for now)
     if (!userId) {
       return NextResponse.json(
-        { message: "User ID is required" },
+        { message: "User email is required" },
         { status: 400 }
       );
     }
 
-    // Confirm the player from waitlist
+    // Confirm the player from waitlist (userId is actually userEmail now)
     const success = await confirmPokerPlayer(gameId, userId);
 
     if (!success) {
@@ -63,14 +63,14 @@ export async function POST(request: NextRequest) {
 
     // Get game details for reservation creation
     const game = await db.query.pokerGames.findFirst({
-      where: (pokerGames, { eq }) => eq(pokerGames.id, gameId),
+      where: eq(pokerGames.id, gameId),
     });
 
     if (game && game.date) {
       // Check if a reservation already exists for this user and game to prevent duplicates
       const existingReservation = await db.query.reservations.findFirst({
         where: and(
-          eq(reservations.userId, userId),
+          eq(reservations.userEmail, userId),
           eq(reservations.type, 'poker'),
           eq(reservations.date, game.date),
           eq(reservations.startTime, game.startTime),
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
       // Only create reservation if one doesn't already exist
       if (!existingReservation) {
         await db.insert(reservations).values({
-          userId: userId,
+          userEmail: userId,
           type: 'poker',
           date: game.date,
           startTime: game.startTime,

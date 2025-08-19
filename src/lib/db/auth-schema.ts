@@ -1,24 +1,22 @@
 import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 
-// NextAuth.js required tables
+// NextAuth.js required tables - Gmail as User ID (id field contains Gmail addresses)
 export const users = sqliteTable('user', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  email: text('email').notNull().unique(),
-  emailVerified: integer('emailVerified', { mode: 'timestamp' }),
+  id: text('id').primaryKey(), // Contains Gmail addresses (e.g., "user@gmail.com")
+  email: text('email').notNull().unique(), // Same Gmail address as id
+  name: text('name'),
   image: text('image'),
+  emailVerified: integer('emailVerified', { mode: 'timestamp' }),
   phone: text('phone'), // Optional phone number
   role: text('role', { enum: ['user', 'admin'] }).notNull().default('user'),
   strikes: integer('strikes').notNull().default(0),
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now') * 1000)`),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`(strftime('%s', 'now') * 1000)`),
 });
 
 export const accounts = sqliteTable('account', {
   id: text('id').primaryKey(),
-  userId: text('userId').notNull(),
+  userId: text('userId').notNull().references(() => users.id, { onDelete: 'cascade' }), // References Gmail address in users.id
   type: text('type').notNull(),
   provider: text('provider').notNull(),
   providerAccountId: text('providerAccountId').notNull(),
@@ -33,7 +31,7 @@ export const accounts = sqliteTable('account', {
 
 export const sessions = sqliteTable('session', {
   id: text('id').primaryKey(),
-  userId: text('userId').notNull(),
+  userId: text('userId').notNull().references(() => users.id, { onDelete: 'cascade' }), // References Gmail address in users.id
   sessionToken: text('sessionToken').notNull().unique(),
   expires: integer('expires', { mode: 'timestamp' }).notNull(),
 });

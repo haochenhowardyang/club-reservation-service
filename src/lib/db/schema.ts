@@ -1,11 +1,10 @@
 import { sqliteTable, text, integer, primaryKey } from 'drizzle-orm/sqlite-core';
 import { relations, sql } from 'drizzle-orm';
 
-// Users table
+// Users table - Using email as primary key to eliminate UUID synchronization issues
 export const users = sqliteTable('users', {
-  id: text('id').primaryKey(),
-  email: text('email').notNull().unique(),
-  name: text('name'), // Made optional - will be filled from Google OAuth on first login
+  email: text('email').primaryKey(),
+  name: text('name'), // Optional - filled from Google OAuth on login
   image: text('image'),
   phone: text('phone'), // Optional phone number
   role: text('role', { enum: ['user', 'admin'] }).notNull().default('user'),
@@ -27,7 +26,7 @@ export const emailWhitelist = sqliteTable('email_whitelist', {
 // Reservations table
 export const reservations = sqliteTable('reservations', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userEmail: text('user_email').notNull().references(() => users.email, { onDelete: 'cascade' }),
   type: text('type', { enum: ['bar', 'mahjong', 'poker'] }).notNull(),
   date: text('date').notNull(), // YYYY-MM-DD format
   startTime: text('start_time').notNull(), // HH:MM format
@@ -55,7 +54,7 @@ export const pokerGames = sqliteTable('poker_games', {
 export const pokerWaitlist = sqliteTable('poker_waitlist', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   gameId: integer('game_id').notNull().references(() => pokerGames.id, { onDelete: 'cascade' }),
-  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userEmail: text('user_email').notNull().references(() => users.email, { onDelete: 'cascade' }),
   position: integer('position').notNull(),
   status: text('status', { enum: ['waiting', 'confirmed', 'declined'] }).notNull().default('waiting'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
@@ -76,7 +75,7 @@ export const blockedSlots = sqliteTable('blocked_slots', {
 // Notifications table (for tracking sent notifications)
 export const notifications = sqliteTable('notifications', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userEmail: text('user_email').notNull().references(() => users.email, { onDelete: 'cascade' }),
   reservationId: integer('reservation_id').references(() => reservations.id, { onDelete: 'cascade' }),
   pokerGameId: integer('poker_game_id').references(() => pokerGames.id, { onDelete: 'cascade' }),
   type: text('type', { enum: ['24h_reminder', '3h_reminder', '4h_reminder', 'promotion', 'cancellation', 'auto_cancelled', 'poker_confirmation', 'poker_invitation', 'poker_reminder', 'poker_cancellation'] }).notNull(),
@@ -102,7 +101,7 @@ export const smsQueue = sqliteTable('sms_queue', {
 // Poker Players table (for marketing and management)
 export const pokerPlayers = sqliteTable('poker_players', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userEmail: text('user_email').notNull().references(() => users.email, { onDelete: 'cascade' }),
   addedBy: text('added_by', { enum: ['admin', 'auto_waitlist'] }).notNull(),
   firstWaitlistDate: integer('first_waitlist_date', { mode: 'timestamp' }),
   totalWaitlistJoins: integer('total_waitlist_joins').notNull().default(0),
@@ -118,7 +117,7 @@ export const gameNotificationTokens = sqliteTable('game_notification_tokens', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   token: text('token').notNull().unique(),
   gameId: integer('game_id').notNull().references(() => pokerGames.id, { onDelete: 'cascade' }),
-  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userEmail: text('user_email').notNull().references(() => users.email, { onDelete: 'cascade' }),
   type: text('type', { enum: ['game_notification', 'waitlist_invite'] }).notNull(),
   status: text('status', { enum: ['pending', 'used', 'expired'] }).notNull().default('pending'),
   expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
@@ -148,8 +147,8 @@ export const usersRelations = relations(users, ({ many }) => ({
 
 export const reservationsRelations = relations(reservations, ({ one, many }) => ({
   user: one(users, {
-    fields: [reservations.userId],
-    references: [users.id],
+    fields: [reservations.userEmail],
+    references: [users.email],
   }),
   notifications: many(notifications),
 }));
@@ -164,15 +163,15 @@ export const pokerWaitlistRelations = relations(pokerWaitlist, ({ one }) => ({
     references: [pokerGames.id],
   }),
   user: one(users, {
-    fields: [pokerWaitlist.userId],
-    references: [users.id],
+    fields: [pokerWaitlist.userEmail],
+    references: [users.email],
   }),
 }));
 
 export const notificationsRelations = relations(notifications, ({ one }) => ({
   user: one(users, {
-    fields: [notifications.userId],
-    references: [users.id],
+    fields: [notifications.userEmail],
+    references: [users.email],
   }),
   reservation: one(reservations, {
     fields: [notifications.reservationId],
@@ -182,8 +181,8 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
 
 export const pokerPlayersRelations = relations(pokerPlayers, ({ one }) => ({
   user: one(users, {
-    fields: [pokerPlayers.userId],
-    references: [users.id],
+    fields: [pokerPlayers.userEmail],
+    references: [users.email],
   }),
 }));
 
@@ -193,8 +192,8 @@ export const gameNotificationTokensRelations = relations(gameNotificationTokens,
     references: [pokerGames.id],
   }),
   user: one(users, {
-    fields: [gameNotificationTokens.userId],
-    references: [users.id],
+    fields: [gameNotificationTokens.userEmail],
+    references: [users.email],
   }),
 }));
 

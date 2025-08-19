@@ -25,7 +25,7 @@ export default async function Home() {
   }
 
   // Get user's reservations
-  const reservations = await getUserReservations(session.user.id);
+  const reservations = await getUserReservations(session.user.email!);
 
   // Get today's date in EDT timezone
   const today = getCurrentEDT().toISODate()!;

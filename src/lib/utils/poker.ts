@@ -204,7 +204,7 @@ export async function joinPokerWaitlist(
     // Add to waitlist
     const result = await db.insert(pokerWaitlist).values({
       gameId,
-      userId,
+      userEmail: userId,
       position,
       status: 'waiting',
     });
@@ -275,13 +275,13 @@ export async function leavePokerWaitlist(
  */
 export async function confirmPokerPlayer(
   gameId: number,
-  userId: string
+  userEmail: string
 ): Promise<boolean> {
   // Check if user is on the waitlist
   const entry = await db.query.pokerWaitlist.findFirst({
     where: and(
       eq(pokerWaitlist.gameId, gameId),
-      eq(pokerWaitlist.userId, userId)
+      eq(pokerWaitlist.userEmail, userEmail)
     ),
   });
   
@@ -305,7 +305,7 @@ export async function confirmPokerPlayer(
   
   // Send confirmation notification
   // In a real implementation, you would create a notification record
-  console.log(`[NOTIFICATION PLACEHOLDER] Sending poker confirmation to user ${userId} for game ${gameId}`);
+  console.log(`[NOTIFICATION PLACEHOLDER] Sending poker confirmation to user ${userEmail} for game ${gameId}`);
   
   return true;
 }
@@ -494,12 +494,12 @@ export async function getUpcomingPokerGamesWithAutoClose() {
  */
 export async function getPokerWaitlistPosition(
   gameId: number,
-  userId: string
+  userEmail: string
 ): Promise<number> {
   const entry = await db.query.pokerWaitlist.findFirst({
     where: and(
       eq(pokerWaitlist.gameId, gameId),
-      eq(pokerWaitlist.userId, userId)
+      eq(pokerWaitlist.userEmail, userEmail)
     ),
   });
   

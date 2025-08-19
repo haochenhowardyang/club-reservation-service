@@ -6,7 +6,7 @@ import { eq, and, desc } from 'drizzle-orm';
  * Add a user to the poker players list
  */
 export async function addPokerPlayer(
-  userId: string,
+  userEmail: string,
   addedBy: 'admin' | 'auto_waitlist',
   firstWaitlistDate?: Date,
   notes?: string
@@ -14,17 +14,17 @@ export async function addPokerPlayer(
   try {
     // Check if user is already in the poker players list
     const existingPlayer = await db.query.pokerPlayers.findFirst({
-      where: eq(pokerPlayers.userId, userId),
+      where: eq(pokerPlayers.userEmail, userEmail),
     });
 
     if (existingPlayer) {
-      console.log(`User ${userId} is already in the poker players list`);
+      console.log(`User ${userEmail} is already in the poker players list`);
       return false;
     }
 
     // Add to poker players list
     await db.insert(pokerPlayers).values({
-      userId,
+      userEmail,
       addedBy,
       firstWaitlistDate: firstWaitlistDate || new Date(),
       totalWaitlistJoins: addedBy === 'auto_waitlist' ? 1 : 0,
@@ -33,10 +33,10 @@ export async function addPokerPlayer(
       notes: notes || null,
     });
 
-    console.log(`Added user ${userId} to poker players list (added by: ${addedBy})`);
+    console.log(`Added user ${userEmail} to poker players list (added by: ${addedBy})`);
     return true;
   } catch (error) {
-    console.error(`Error adding user ${userId} to poker players list:`, error);
+    console.error(`Error adding user ${userEmail} to poker players list:`, error);
     return false;
   }
 }
@@ -44,15 +44,15 @@ export async function addPokerPlayer(
 /**
  * Remove a user from the poker players list
  */
-export async function removePokerPlayer(userId: string): Promise<boolean> {
+export async function removePokerPlayer(userEmail: string): Promise<boolean> {
   try {
     const result = await db.delete(pokerPlayers)
-      .where(eq(pokerPlayers.userId, userId));
+      .where(eq(pokerPlayers.userEmail, userEmail));
 
-    console.log(`Removed user ${userId} from poker players list`);
+    console.log(`Removed user ${userEmail} from poker players list`);
     return true;
   } catch (error) {
-    console.error(`Error removing user ${userId} from poker players list:`, error);
+    console.error(`Error removing user ${userEmail} from poker players list:`, error);
     return false;
   }
 }
@@ -96,7 +96,7 @@ export async function getMarketingOptInPlayers() {
  * Update poker player marketing opt-in status
  */
 export async function updateMarketingOptIn(
-  userId: string,
+  userEmail: string,
   optIn: boolean
 ): Promise<boolean> {
   try {
@@ -105,12 +105,12 @@ export async function updateMarketingOptIn(
         marketingOptIn: optIn,
         updatedAt: new Date()
       })
-      .where(eq(pokerPlayers.userId, userId));
+      .where(eq(pokerPlayers.userEmail, userEmail));
 
-    console.log(`Updated marketing opt-in for user ${userId} to ${optIn}`);
+    console.log(`Updated marketing opt-in for user ${userEmail} to ${optIn}`);
     return true;
   } catch (error) {
-    console.error(`Error updating marketing opt-in for user ${userId}:`, error);
+    console.error(`Error updating marketing opt-in for user ${userEmail}:`, error);
     return false;
   }
 }
@@ -119,7 +119,7 @@ export async function updateMarketingOptIn(
  * Update poker player notes
  */
 export async function updatePokerPlayerNotes(
-  userId: string,
+  userEmail: string,
   notes: string
 ): Promise<boolean> {
   try {
@@ -128,12 +128,12 @@ export async function updatePokerPlayerNotes(
         notes,
         updatedAt: new Date()
       })
-      .where(eq(pokerPlayers.userId, userId));
+      .where(eq(pokerPlayers.userEmail, userEmail));
 
-    console.log(`Updated notes for poker player ${userId}`);
+    console.log(`Updated notes for poker player ${userEmail}`);
     return true;
   } catch (error) {
-    console.error(`Error updating notes for poker player ${userId}:`, error);
+    console.error(`Error updating notes for poker player ${userEmail}:`, error);
     return false;
   }
 }
@@ -141,10 +141,10 @@ export async function updatePokerPlayerNotes(
 /**
  * Increment waitlist join count for a poker player
  */
-export async function incrementWaitlistJoins(userId: string): Promise<boolean> {
+export async function incrementWaitlistJoins(userEmail: string): Promise<boolean> {
   try {
     const player = await db.query.pokerPlayers.findFirst({
-      where: eq(pokerPlayers.userId, userId),
+      where: eq(pokerPlayers.userEmail, userEmail),
     });
 
     if (player) {
@@ -153,15 +153,15 @@ export async function incrementWaitlistJoins(userId: string): Promise<boolean> {
           totalWaitlistJoins: player.totalWaitlistJoins + 1,
           updatedAt: new Date()
         })
-        .where(eq(pokerPlayers.userId, userId));
+        .where(eq(pokerPlayers.userEmail, userEmail));
 
-      console.log(`Incremented waitlist joins for user ${userId}`);
+      console.log(`Incremented waitlist joins for user ${userEmail}`);
       return true;
     }
 
     return false;
   } catch (error) {
-    console.error(`Error incrementing waitlist joins for user ${userId}:`, error);
+    console.error(`Error incrementing waitlist joins for user ${userEmail}:`, error);
     return false;
   }
 }
@@ -169,10 +169,10 @@ export async function incrementWaitlistJoins(userId: string): Promise<boolean> {
 /**
  * Increment games played count for a poker player
  */
-export async function incrementGamesPlayed(userId: string): Promise<boolean> {
+export async function incrementGamesPlayed(userEmail: string): Promise<boolean> {
   try {
     const player = await db.query.pokerPlayers.findFirst({
-      where: eq(pokerPlayers.userId, userId),
+      where: eq(pokerPlayers.userEmail, userEmail),
     });
 
     if (player) {
@@ -181,15 +181,15 @@ export async function incrementGamesPlayed(userId: string): Promise<boolean> {
           totalGamesPlayed: player.totalGamesPlayed + 1,
           updatedAt: new Date()
         })
-        .where(eq(pokerPlayers.userId, userId));
+        .where(eq(pokerPlayers.userEmail, userEmail));
 
-      console.log(`Incremented games played for user ${userId}`);
+      console.log(`Incremented games played for user ${userEmail}`);
       return true;
     }
 
     return false;
   } catch (error) {
-    console.error(`Error incrementing games played for user ${userId}:`, error);
+    console.error(`Error incrementing games played for user ${userEmail}:`, error);
     return false;
   }
 }
@@ -197,15 +197,15 @@ export async function incrementGamesPlayed(userId: string): Promise<boolean> {
 /**
  * Check if a user is in the poker players list
  */
-export async function isPokerPlayer(userId: string): Promise<boolean> {
+export async function isPokerPlayer(userEmail: string): Promise<boolean> {
   try {
     const player = await db.query.pokerPlayers.findFirst({
-      where: eq(pokerPlayers.userId, userId),
+      where: eq(pokerPlayers.userEmail, userEmail),
     });
 
     return !!player;
   } catch (error) {
-    console.error(`Error checking if user ${userId} is a poker player:`, error);
+    console.error(`Error checking if user ${userEmail} is a poker player:`, error);
     return false;
   }
 }
@@ -242,16 +242,16 @@ export async function sendMarketingSMS(message: string): Promise<number> {
  * Send marketing SMS to specific poker players
  */
 export async function sendMarketingSMSToPlayers(
-  userIds: string[],
+  userEmails: string[],
   message: string
 ): Promise<number> {
   try {
     let sentCount = 0;
 
-    for (const userId of userIds) {
+    for (const userEmail of userEmails) {
       const player = await db.query.pokerPlayers.findFirst({
         where: and(
-          eq(pokerPlayers.userId, userId),
+          eq(pokerPlayers.userEmail, userEmail),
           eq(pokerPlayers.marketingOptIn, true)
         ),
         with: {

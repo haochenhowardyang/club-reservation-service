@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 
 interface PokerPlayer {
   id: number;
-  userId: string;
+  userEmail: string;
   addedBy: 'admin' | 'auto_waitlist';
   firstWaitlistDate: string;
   totalWaitlistJoins: number;
@@ -15,9 +15,8 @@ interface PokerPlayer {
   createdAt: string;
   updatedAt: string;
   user: {
-    id: string;
-    name: string;
     email: string;
+    name: string;
     phone: string | null;
     strikes: number;
     isActive: boolean;
@@ -188,7 +187,7 @@ export default function PokerPlayersContent() {
         },
         body: JSON.stringify({
           action: 'add',
-          userId: selectedUser.id,
+          userId: selectedUser.email,
           notes: addPlayerNotes.trim() || undefined,
         }),
       });
@@ -393,8 +392,8 @@ export default function PokerPlayersContent() {
                 <div className="flex items-center">
                   <input
                     type="checkbox"
-                    checked={selectedPlayers.includes(player.userId)}
-                    onChange={(e) => handlePlayerSelection(player.userId, e.target.checked)}
+                    checked={selectedPlayers.includes(player.userEmail)}
+                    onChange={(e) => handlePlayerSelection(player.userEmail, e.target.checked)}
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mr-4"
                   />
                   <div className="flex-shrink-0 h-10 w-10">
@@ -430,7 +429,7 @@ export default function PokerPlayersContent() {
                 </div>
                 <div className="flex items-center space-x-2">
                   <button
-                    onClick={() => handleMarketingOptInToggle(player.userId, !player.marketingOptIn)}
+                    onClick={() => handleMarketingOptInToggle(player.userEmail, !player.marketingOptIn)}
                     className={`inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded ${
                       player.marketingOptIn
                         ? 'text-red-700 bg-red-100 hover:bg-red-200'
@@ -440,7 +439,7 @@ export default function PokerPlayersContent() {
                     {player.marketingOptIn ? 'Opt Out' : 'Opt In'}
                   </button>
                   <button
-                    onClick={() => handleRemovePlayer(player.userId)}
+                    onClick={() => handleRemovePlayer(player.userEmail)}
                     className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded text-red-700 bg-red-100 hover:bg-red-200"
                   >
                     Remove
@@ -529,7 +528,7 @@ export default function PokerPlayersContent() {
                 <div className="mb-4 max-h-40 overflow-y-auto border border-gray-200 rounded-md">
                   {searchResults.map((user) => (
                     <div
-                      key={user.id}
+                      key={user.email}
                       onClick={() => {
                         setSelectedUser(user);
                         setSearchQuery(user.name || user.email);

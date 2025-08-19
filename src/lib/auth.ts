@@ -96,10 +96,36 @@ export const authOptions: NextAuthOptions = {
           
           console.log(`[AUTH] ✅ Synchronized both tables - using NextAuth ID: ${user.id}`);
           
-          // Note: Foreign key references in other tables (like poker players) 
-          // will need to be updated if they reference the old ID
+          // Handle foreign key migration if user ID changed
           if (oldId !== user.id) {
-            console.log(`[AUTH] ⚠️ User ID changed from ${oldId} to ${user.id} - foreign key references may need updating`);
+            console.log(`[AUTH] 🔄 User ID changed from ${oldId} to ${user.id} - migrating foreign key references`);
+            
+            try {
+              const { migrateForeignKeyReferences, checkUserReferences } = await import('./utils/user-migration');
+              
+              // First check if there are any references to migrate
+              const referenceCheck = await checkUserReferences(oldId);
+              
+              if (referenceCheck.hasReferences) {
+                console.log(`[AUTH] 🔍 Found references to migrate:`, referenceCheck.counts);
+                
+                // Perform the migration
+                const migrationResult = await migrateForeignKeyReferences(oldId, user.id);
+                
+                if (migrationResult.success) {
+                  console.log(`[AUTH] ✅ Successfully migrated all foreign key references`);
+                  console.log(`[AUTH] 📊 Migration summary:`, migrationResult.migratedCounts);
+                } else {
+                  console.error(`[AUTH] ❌ Foreign key migration completed with errors:`);
+                  console.error(`[AUTH] 📊 Migrated counts:`, migrationResult.migratedCounts);
+                  console.error(`[AUTH] 🚨 Errors:`, migrationResult.errors);
+                }
+              } else {
+                console.log(`[AUTH] ℹ️ No foreign key references found to migrate`);
+              }
+            } catch (migrationError) {
+              console.error(`[AUTH] ❌ Fatal error during foreign key migration:`, migrationError);
+            }
           }
           
           return;
