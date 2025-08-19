@@ -129,7 +129,7 @@ export async function sendPokerConfirmationSMS(
  */
 export async function getPokerConfirmationStatus(
   gameId: number,
-  userId: string
+  userEmail: string
 ): Promise<{
   hasPendingConfirmation: boolean;
   status?: 'pending' | 'sent' | 'confirmed' | 'declined' | 'expired' | 'failed';
@@ -141,7 +141,7 @@ export async function getPokerConfirmationStatus(
     .from(notifications)
     .where(and(
       eq(notifications.pokerGameId, gameId),
-      eq(notifications.userId, userId),
+      eq(notifications.userEmail, userEmail),
       eq(notifications.type, 'poker_confirmation')
     ))
     .limit(1);
@@ -206,10 +206,17 @@ export async function handlePokerConfirmationResponse(
       return { success: false, error: 'Invalid game ID in notification' };
     }
 
-    // Update notification status
-    await db.update(notifications)
-      .set({ status: response })
-      .where(eq(notifications.id, notification.id));
+    try {
+      // Update notification status (notifications table supports 'confirmed'/'declined')
+      console.log(`Updating notification ${notification.id} status to ${response}`);
+      await db.update(notifications)
+        .set({ status: response })
+        .where(eq(notifications.id, notification.id));
+      console.log(`Successfully updated notification status`);
+    } catch (notificationError) {
+      console.error(`Error updating notification status:`, notificationError);
+      throw notificationError;
+    }
 
     // Find and update the corresponding waitlist entry using email-based schema
     const waitlistEntryResult = await db
@@ -224,10 +231,19 @@ export async function handlePokerConfirmationResponse(
     const waitlistEntry = waitlistEntryResult[0];
 
     if (waitlistEntry) {
-      // Update waitlist entry status to match the confirmation response
-      await db.update(pokerWaitlist)
-        .set({ status: response === 'confirmed' ? 'confirmed' : 'declined' })
-        .where(eq(pokerWaitlist.id, waitlistEntry.id));
+      try {
+        // Update waitlist entry status to match the confirmation response
+        // (pokerWaitlist table supports 'confirmed'/'declined')
+        const waitlistStatus = response === 'confirmed' ? 'confirmed' : 'declined';
+        console.log(`Updating waitlist entry ${waitlistEntry.id} status to ${waitlistStatus}`);
+        await db.update(pokerWaitlist)
+          .set({ status: waitlistStatus as 'confirmed' | 'declined' })
+          .where(eq(pokerWaitlist.id, waitlistEntry.id));
+        console.log(`Successfully updated waitlist entry status`);
+      } catch (waitlistError) {
+        console.error(`Error updating waitlist status:`, waitlistError);
+        throw waitlistError;
+      }
 
       // If confirmed, increment the game's current player count and create reservation
       if (response === 'confirmed') {

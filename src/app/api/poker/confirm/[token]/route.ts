@@ -3,7 +3,7 @@ import { handlePokerConfirmationResponse } from "@/lib/utils/poker-notifications
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { token: string } }
+  { params }: { params: Promise<{ token: string }> }
 ) {
   try {
     const { response } = await request.json();
@@ -15,7 +15,8 @@ export async function POST(
       );
     }
 
-    const result = await handlePokerConfirmationResponse(params.token, response);
+    const resolvedParams = await params;
+    const result = await handlePokerConfirmationResponse(resolvedParams.token, response);
 
     if (result.success) {
       return NextResponse.json({

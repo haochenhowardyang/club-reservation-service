@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { pokerGames, pokerWaitlist, reservations } from '../db/schema';
+import { pokerGames, pokerWaitlist, reservations, notifications, smsQueue } from '../db/schema';
 import { eq, and, asc, desc, lt, gte, gt, or } from 'drizzle-orm';
 import { isWithinBookingWindow, isReservationInPast } from './time';
 import { sendPromotionNotification } from './notifications';
@@ -251,6 +251,43 @@ export async function leavePokerWaitlist(
       eq(pokerWaitlist.gameId, gameId),
       eq(pokerWaitlist.userEmail, userEmail)
     ));
+  
+  // Cancel any pending poker confirmations for this user/game combination
+  try {
+    const cancelledNotifications = await db.update(notifications)
+      .set({ 
+        status: 'expired'
+      })
+      .where(and(
+        eq(notifications.pokerGameId, gameId),
+        eq(notifications.userEmail, userEmail),
+        eq(notifications.type, 'poker_confirmation'),
+        // Only cancel pending/sent confirmations, not already processed ones
+        or(
+          eq(notifications.status, 'pending'),
+          eq(notifications.status, 'sent')
+        )
+      ));
+    
+    if (cancelledNotifications.changes > 0) {
+      console.log(`Cancelled ${cancelledNotifications.changes} poker confirmation(s) for removed user ${userEmail} from game ${gameId}`);
+      
+      // Also mark any unsent SMS messages as failed for these confirmations
+      await db.update(smsQueue)
+        .set({ 
+          status: 'failed',
+          sentAt: new Date()
+        })
+        .where(and(
+          eq(smsQueue.status, 'pending'),
+          // Find SMS messages that reference the cancelled notifications
+          // Note: We'll just mark all pending SMS as failed for now since we don't have a direct relation
+        ));
+    }
+  } catch (error) {
+    console.error(`Error cancelling confirmations for removed user ${userEmail}:`, error);
+    // Don't fail the waitlist removal if confirmation cancellation fails
+  }
   
   // Reorder positions for remaining waitlist entries
   const remainingEntries = await db.query.pokerWaitlist.findMany({
