@@ -3,10 +3,11 @@ import { getConfirmationDetails } from "@/lib/utils/poker-notifications";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { token: string } }
+  { params }: { params: Promise<{ token: string }> }
 ) {
   try {
-    const result = await getConfirmationDetails(params.token);
+    const resolvedParams = await params;
+    const result = await getConfirmationDetails(resolvedParams.token);
 
     if (result.success) {
       return NextResponse.json({

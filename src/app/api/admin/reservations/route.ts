@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
     // Get reservations with user information
     const allReservations = await db.select({
       id: reservations.id,
-      userId: reservations.userId,
+      userEmail: reservations.userEmail,
       type: reservations.type,
       date: reservations.date,
       startTime: reservations.startTime,
@@ -100,13 +100,13 @@ export async function GET(request: NextRequest) {
       createdAt: reservations.createdAt,
       updatedAt: reservations.updatedAt,
       userName: users.name,
-      userEmail: users.email,
+      userEmailFromUsers: users.email,
       userPhone: users.phone,
       userStrikes: users.strikes,
       userIsActive: users.isActive
     })
     .from(reservations)
-    .leftJoin(users, eq(reservations.userId, users.id))
+    .leftJoin(users, eq(reservations.userEmail, users.email))
     .where(and(...finalWhereConditions))
     .orderBy(
       sortOrder === 'asc' ? asc(sortColumn) : desc(sortColumn),
@@ -155,10 +155,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { userId, type, date, startTime, endTime, partySize, status, notes } = body;
+    const { userEmail, type, date, startTime, endTime, partySize, status, notes } = body;
 
     // Validate required fields
-    if (!userId || !type || !date || !startTime || !endTime || !partySize) {
+    if (!userEmail || !type || !date || !startTime || !endTime || !partySize) {
       return NextResponse.json(
         { message: "Missing required fields" },
         { status: 400 }
@@ -167,7 +167,7 @@ export async function POST(request: NextRequest) {
 
     // Create the reservation
     const result = await db.insert(reservations).values({
-      userId,
+      userEmail,
       type,
       date,
       startTime,

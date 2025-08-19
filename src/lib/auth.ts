@@ -43,19 +43,18 @@ export const authOptions: NextAuthOptions = {
         
         if (existingMainUser.length > 0) {
           console.log(`[AUTH] 🔄 Found existing user in main table: ${user.email}`);
-          console.log(`[AUTH] Existing main table ID: ${existingMainUser[0].id}, NextAuth ID: ${user.id}`);
+          console.log(`[AUTH] Existing main table email: ${existingMainUser[0].email}, NextAuth ID: ${user.id}`);
           
-          // Update main table to use NextAuth ID for consistency and fill in name from Google
-          console.log(`[AUTH] 🔧 Updating main table user to use NextAuth ID and Google name`);
+          // Update main table to fill in name from Google
+          console.log(`[AUTH] 🔧 Updating main table user with Google name`);
           
-          const oldId = existingMainUser[0].id;
+          const userEmail = existingMainUser[0].email;
           const shouldUpdateName = !existingMainUser[0].name && user.name;
           
           // Only set name if Google provides one or user already has one - no email fallback
           const nameToSet = shouldUpdateName ? user.name! : existingMainUser[0].name;
           
           const updateData: any = {
-            id: user.id, // Use the NextAuth ID
             image: user.image || existingMainUser[0].image, // Update image from Google if available
             updatedAt: new Date()
           };
@@ -68,7 +67,7 @@ export const authOptions: NextAuthOptions = {
           await db
             .update(mainUsers)
             .set(updateData)
-            .where(eq(mainUsers.id, oldId));
+            .where(eq(mainUsers.email, userEmail));
           
           if (shouldUpdateName) {
             console.log(`[AUTH] 📝 Filled empty name from Google: ${user.name}`);
@@ -96,38 +95,6 @@ export const authOptions: NextAuthOptions = {
           
           console.log(`[AUTH] ✅ Synchronized both tables - using NextAuth ID: ${user.id}`);
           
-          // Handle foreign key migration if user ID changed
-          if (oldId !== user.id) {
-            console.log(`[AUTH] 🔄 User ID changed from ${oldId} to ${user.id} - migrating foreign key references`);
-            
-            try {
-              const { migrateForeignKeyReferences, checkUserReferences } = await import('./utils/user-migration');
-              
-              // First check if there are any references to migrate
-              const referenceCheck = await checkUserReferences(oldId);
-              
-              if (referenceCheck.hasReferences) {
-                console.log(`[AUTH] 🔍 Found references to migrate:`, referenceCheck.counts);
-                
-                // Perform the migration
-                const migrationResult = await migrateForeignKeyReferences(oldId, user.id);
-                
-                if (migrationResult.success) {
-                  console.log(`[AUTH] ✅ Successfully migrated all foreign key references`);
-                  console.log(`[AUTH] 📊 Migration summary:`, migrationResult.migratedCounts);
-                } else {
-                  console.error(`[AUTH] ❌ Foreign key migration completed with errors:`);
-                  console.error(`[AUTH] 📊 Migrated counts:`, migrationResult.migratedCounts);
-                  console.error(`[AUTH] 🚨 Errors:`, migrationResult.errors);
-                }
-              } else {
-                console.log(`[AUTH] ℹ️ No foreign key references found to migrate`);
-              }
-            } catch (migrationError) {
-              console.error(`[AUTH] ❌ Fatal error during foreign key migration:`, migrationError);
-            }
-          }
-          
           return;
         }
         
@@ -135,7 +102,6 @@ export const authOptions: NextAuthOptions = {
         
         // Create user in main users table (normal OAuth flow)
         await db.insert(mainUsers).values({
-          id: user.id,
           email: user.email!.toLowerCase(),
           name: user.name || null, // Only use Google name, no email fallback
           image: user.image,

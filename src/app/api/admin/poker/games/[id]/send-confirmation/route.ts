@@ -36,7 +36,8 @@ export async function POST(
       );
     }
 
-    // Send SMS confirmation
+    // For the email-based schema, userId is actually the user's email address
+    // Send SMS confirmation using email
     const result = await sendPokerConfirmationSMS(gameId, userId);
 
     if (result.success) {

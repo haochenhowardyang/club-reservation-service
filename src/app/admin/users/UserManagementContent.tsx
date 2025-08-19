@@ -148,12 +148,12 @@ export default function UserManagementContent({ session }: UserManagementContent
   };
 
   // Toggle user active status
-  const toggleUserStatus = async (userId: string, isActive: boolean) => {
+  const toggleUserStatus = async (userEmail: string, isActive: boolean) => {
     try {
       setError(null);
       setSuccess(null);
 
-      const response = await fetch(`/api/admin/users/${userId}/status`, {
+      const response = await fetch(`/api/admin/users/${encodeURIComponent(userEmail)}/status`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -167,7 +167,7 @@ export default function UserManagementContent({ session }: UserManagementContent
 
       setUsers(
         users.map((user) =>
-          user.id === userId ? { ...user, isActive: !isActive } : user
+          user.email === userEmail ? { ...user, isActive: !isActive } : user
         )
       );
       setSuccess(`User status updated successfully`);
@@ -178,14 +178,14 @@ export default function UserManagementContent({ session }: UserManagementContent
   };
 
   // Toggle user role
-  const toggleUserRole = async (userId: string, currentRole: string) => {
+  const toggleUserRole = async (userEmail: string, currentRole: string) => {
     try {
       setError(null);
       setSuccess(null);
 
       const newRole = currentRole === "admin" ? "user" : "admin";
 
-      const response = await fetch(`/api/admin/users/${userId}/role`, {
+      const response = await fetch(`/api/admin/users/${encodeURIComponent(userEmail)}/role`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -199,7 +199,7 @@ export default function UserManagementContent({ session }: UserManagementContent
 
       setUsers(
         users.map((user) =>
-          user.id === userId ? { ...user, role: newRole } : user
+          user.email === userEmail ? { ...user, role: newRole } : user
         )
       );
       setSuccess(`User role updated to ${newRole}`);
@@ -256,7 +256,8 @@ export default function UserManagementContent({ session }: UserManagementContent
     setSuccess(null);
 
     try {
-      const response = await fetch(`/api/admin/users/${user.id}/delete`, {
+      // Use email instead of id for delete URL since database now uses email as primary key
+      const response = await fetch(`/api/admin/users/${encodeURIComponent(user.email)}/delete`, {
         method: "DELETE",
       });
 
@@ -267,8 +268,8 @@ export default function UserManagementContent({ session }: UserManagementContent
 
       const result = await response.json();
       
-      // Remove user from the list
-      setUsers(users.filter(u => u.id !== user.id));
+      // Remove user from the list (filter by email since id might be undefined)
+      setUsers(users.filter(u => u.email !== user.email));
       
       // Close modal
       setIsDeleteModalOpen(false);
@@ -494,7 +495,7 @@ export default function UserManagementContent({ session }: UserManagementContent
                               <div className="flex justify-end space-x-2">
                                 <button
                                   onClick={() =>
-                                    toggleUserRole(user.id, user.role)
+                                    toggleUserRole(user.email, user.role)
                                   }
                                   className="text-indigo-600 hover:text-indigo-900"
                                 >
@@ -504,7 +505,7 @@ export default function UserManagementContent({ session }: UserManagementContent
                                 </button>
                                 <button
                                   onClick={() =>
-                                    toggleUserStatus(user.id, user.isActive)
+                                    toggleUserStatus(user.email, user.isActive)
                                   }
                                   className={`${
                                     user.isActive
@@ -514,7 +515,7 @@ export default function UserManagementContent({ session }: UserManagementContent
                                 >
                                   {user.isActive ? "Deactivate" : "Activate"}
                                 </button>
-                                {user.role !== "admin" && user.id !== session.user.id && (
+                                {user.role !== "admin" && user.email !== session.user.email && (
                                   <button
                                     onClick={() => {
                                       setUserToDelete(user);

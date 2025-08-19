@@ -32,6 +32,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check if user email exists (required for email-based schema)
+    if (!session.user.email) {
+      console.log(`[RESERVATION_API] ❌ No user email in session`);
+      return NextResponse.json(
+        { message: "User email not found in session" },
+        { status: 401 }
+      );
+    }
+
     // Check if user has too many strikes
     if (session.user.strikes >= 3) {
       return NextResponse.json(
@@ -104,9 +113,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create the reservation
+    // Create the reservation - use email instead of userId for email-based schema
     const result = await createReservation(
-      userId,
+      session.user.email, // Use email instead of UUID after schema migration
       date,
       startTime,
       type as "bar" | "mahjong" | "poker",

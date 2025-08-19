@@ -231,13 +231,13 @@ export async function joinPokerWaitlist(
  */
 export async function leavePokerWaitlist(
   gameId: number,
-  userId: string
+  userEmail: string
 ): Promise<boolean> {
-  // Check if user is on the waitlist
+  // Check if user is on the waitlist using email-based schema
   const entry = await db.query.pokerWaitlist.findFirst({
     where: and(
       eq(pokerWaitlist.gameId, gameId),
-      eq(pokerWaitlist.userId, userId)
+      eq(pokerWaitlist.userEmail, userEmail)
     ),
   });
   
@@ -245,11 +245,11 @@ export async function leavePokerWaitlist(
     return false;
   }
   
-  // Remove from waitlist
+  // Remove from waitlist using email-based schema
   await db.delete(pokerWaitlist)
     .where(and(
       eq(pokerWaitlist.gameId, gameId),
-      eq(pokerWaitlist.userId, userId)
+      eq(pokerWaitlist.userEmail, userEmail)
     ));
   
   // Reorder positions for remaining waitlist entries

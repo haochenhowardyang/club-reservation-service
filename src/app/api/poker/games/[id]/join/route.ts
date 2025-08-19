@@ -58,11 +58,20 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { userId } = body;
 
-    // Validate user ID
+    // Validate user ID - but use email for database operations after schema migration
     if (userId !== session.user.id) {
       return NextResponse.json(
         { message: "You can only join the waitlist for yourself" },
         { status: 403 }
+      );
+    }
+
+    // Use email instead of userId for database operations
+    const userEmail = session.user.email;
+    if (!userEmail) {
+      return NextResponse.json(
+        { message: "User email not found in session" },
+        { status: 401 }
       );
     }
 
@@ -93,73 +102,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user is already on the waitlist
+    // Check if user is already on the waitlist using email-based schema
     const existingEntry = await db.query.pokerWaitlist.findFirst({
       where: and(
         eq(pokerWaitlist.gameId, gameId),
-        eq(pokerWaitlist.userId, userId)
+        eq(pokerWaitlist.userEmail, userEmail)
       ),
     });
     
     if (existingEntry) {
-      console.log(`User ${userId} is already on the waitlist for game ${gameId}`);
+      console.log(`User ${userEmail} is already on the waitlist for game ${gameId}`);
       return NextResponse.json({ position: existingEntry.position });
     }
     
     // CRITICAL: Ensure the user exists in the users table before proceeding
-    console.log(`Ensuring user ${userId} exists in users table before adding to waitlist...`);
-    const userExists = await ensureUserExists(userId);
+    console.log(`Ensuring user ${userEmail} exists in users table before adding to waitlist...`);
+    const userExists = await ensureUserExists(userEmail);
     
     if (!userExists) {
-      console.error(`Failed to ensure user ${userId} exists in users table`);
-      
-      // Open a direct connection to the database for detailed diagnostics
-      const dbPath = process.env.DATABASE_URL || '/data/sqlite.db';
-      const sqlite = new Database(dbPath);
-      
-      try {
-        // Check both tables to provide detailed error information
-        const userInUserTable = sqlite.prepare('SELECT 1 FROM user WHERE id = ?').get(userId);
-        const userInUsersTable = sqlite.prepare('SELECT 1 FROM users WHERE id = ?').get(userId);
-        
-        console.log(`Diagnostic check - User in NextAuth 'user' table: ${!!userInUserTable}, User in app 'users' table: ${!!userInUsersTable}`);
-        
-        if (!userInUserTable) {
-          return NextResponse.json(
-            { message: "User not found in authentication system. Please try logging out and back in." },
-            { status: 401 }
-          );
-        } else {
-          return NextResponse.json(
-            { message: "User synchronization failed. Please try again or contact support." },
-            { status: 500 }
-          );
-        }
-      } finally {
-        sqlite.close();
-      }
+      console.error(`Failed to ensure user ${userEmail} exists in users table`);
+      return NextResponse.json(
+        { message: "User not found in database. Please try logging out and back in." },
+        { status: 401 }
+      );
     }
     
-    // Double-check that the user now exists in the users table using direct SQL
-    // This is more reliable than using the ORM
-    const dbPath = process.env.DATABASE_URL || '/data/sqlite.db';
-    const sqlite = new Database(dbPath);
-    
-    try {
-      const userInDb = sqlite.prepare('SELECT 1 FROM users WHERE id = ?').get(userId);
-      
-      if (!userInDb) {
-        console.error(`User ${userId} still not found in users table after synchronization attempt (direct SQL check)`);
-        return NextResponse.json(
-          { message: "User synchronization verification failed. Please try again later." },
-          { status: 500 }
-        );
-      }
-      
-      console.log(`User ${userId} confirmed in users table (direct SQL check), proceeding with waitlist addition`);
-    } finally {
-      sqlite.close();
-    }
+    console.log(`User ${userEmail} confirmed in users table, proceeding with waitlist addition`);
     
     // Get current position in waitlist
     const waitlistEntries = await db.query.pokerWaitlist.findMany({
@@ -176,10 +144,10 @@ export async function POST(request: NextRequest) {
       try {
         console.log(`Attempting to insert with ORM...`);
         
-        // Use the correct property names for the ORM
+        // Use the correct property names for the email-based ORM schema
         const result = await db.insert(pokerWaitlist).values({
-          gameId,  // ORM maps this to game_id in the database
-          userId,  // ORM maps this to user_id in the database
+          gameId,      // Maps to game_id in database
+          userEmail,   // Maps to user_email in database (email-based schema)
           position,
           status: 'waiting',
         });
@@ -188,30 +156,30 @@ export async function POST(request: NextRequest) {
         
         // Auto-add user to poker players list if not already there
         try {
-          const isAlreadyPokerPlayer = await isPokerPlayer(userId);
+          const isAlreadyPokerPlayer = await isPokerPlayer(userEmail);
           
           if (!isAlreadyPokerPlayer) {
-            console.log(`Adding user ${userId} to poker players list (first-time waitlist join)`);
-            const addedToPlayers = await addPokerPlayer(userId, 'auto_waitlist', new Date());
+            console.log(`Adding user ${userEmail} to poker players list (first-time waitlist join)`);
+            const addedToPlayers = await addPokerPlayer(userEmail, 'auto_waitlist', new Date());
             
             if (addedToPlayers) {
-              console.log(`Successfully added user ${userId} to poker players list`);
+              console.log(`Successfully added user ${userEmail} to poker players list`);
             } else {
-              console.warn(`Failed to add user ${userId} to poker players list, but waitlist join succeeded`);
+              console.warn(`Failed to add user ${userEmail} to poker players list, but waitlist join succeeded`);
             }
           } else {
-            console.log(`User ${userId} is already a poker player, incrementing waitlist join count`);
-            const incremented = await incrementWaitlistJoins(userId);
+            console.log(`User ${userEmail} is already a poker player, incrementing waitlist join count`);
+            const incremented = await incrementWaitlistJoins(userEmail);
             
             if (incremented) {
-              console.log(`Successfully incremented waitlist joins for user ${userId}`);
+              console.log(`Successfully incremented waitlist joins for user ${userEmail}`);
             } else {
-              console.warn(`Failed to increment waitlist joins for user ${userId}, but waitlist join succeeded`);
+              console.warn(`Failed to increment waitlist joins for user ${userEmail}, but waitlist join succeeded`);
             }
           }
         } catch (playerError) {
           // Don't fail the waitlist join if poker player operations fail
-          console.error(`Error managing poker player status for user ${userId}:`, playerError);
+          console.error(`Error managing poker player status for user ${userEmail}:`, playerError);
         }
         
         return NextResponse.json({ position });
@@ -229,45 +197,45 @@ export async function POST(request: NextRequest) {
           sqlite.pragma('foreign_keys = ON');
           
           // Log the values we're trying to insert for debugging
-          console.log(`Inserting values: game_id=${gameId}, user_id=${userId}, position=${position}`);
+          console.log(`Inserting values: game_id=${gameId}, user_email=${userEmail}, position=${position}`);
           
-          // Use direct SQL to insert the record
+          // Use direct SQL to insert the record with email-based schema
           const stmt = sqlite.prepare(`
-            INSERT INTO poker_waitlist (game_id, user_id, position, status, created_at, updated_at)
+            INSERT INTO poker_waitlist (game_id, user_email, position, status, created_at, updated_at)
             VALUES (?, ?, ?, 'waiting', ?, ?)
           `);
           
           const now = Date.now();
-          const result = stmt.run(gameId, userId, position, now, now);
+          const result = stmt.run(gameId, userEmail, position, now, now);
           
           console.log(`Direct SQL insert successful:`, result);
           
           // Auto-add user to poker players list if not already there (SQL fallback path)
           try {
-            const isAlreadyPokerPlayer = await isPokerPlayer(userId);
+            const isAlreadyPokerPlayer = await isPokerPlayer(userEmail);
             
             if (!isAlreadyPokerPlayer) {
-              console.log(`Adding user ${userId} to poker players list (first-time waitlist join - SQL fallback)`);
-              const addedToPlayers = await addPokerPlayer(userId, 'auto_waitlist', new Date());
+              console.log(`Adding user ${userEmail} to poker players list (first-time waitlist join - SQL fallback)`);
+              const addedToPlayers = await addPokerPlayer(userEmail, 'auto_waitlist', new Date());
               
               if (addedToPlayers) {
-                console.log(`Successfully added user ${userId} to poker players list`);
+                console.log(`Successfully added user ${userEmail} to poker players list`);
               } else {
-                console.warn(`Failed to add user ${userId} to poker players list, but waitlist join succeeded`);
+                console.warn(`Failed to add user ${userEmail} to poker players list, but waitlist join succeeded`);
               }
             } else {
-              console.log(`User ${userId} is already a poker player, incrementing waitlist join count`);
-              const incremented = await incrementWaitlistJoins(userId);
+              console.log(`User ${userEmail} is already a poker player, incrementing waitlist join count`);
+              const incremented = await incrementWaitlistJoins(userEmail);
               
               if (incremented) {
-                console.log(`Successfully incremented waitlist joins for user ${userId}`);
+                console.log(`Successfully incremented waitlist joins for user ${userEmail}`);
               } else {
-                console.warn(`Failed to increment waitlist joins for user ${userId}, but waitlist join succeeded`);
+                console.warn(`Failed to increment waitlist joins for user ${userEmail}, but waitlist join succeeded`);
               }
             }
           } catch (playerError) {
             // Don't fail the waitlist join if poker player operations fail
-            console.error(`Error managing poker player status for user ${userId}:`, playerError);
+            console.error(`Error managing poker player status for user ${userEmail}:`, playerError);
           }
           
           return NextResponse.json({ position });
@@ -300,7 +268,7 @@ export async function POST(request: NextRequest) {
           console.log(`Poker waitlist foreign keys:`, foreignKeys);
           
           // Check if the user and game actually exist in their respective tables
-          const userExists = sqlite.prepare('SELECT 1 FROM users WHERE id = ?').get(userId);
+          const userExists = sqlite.prepare('SELECT 1 FROM users WHERE email = ?').get(userEmail);
           const gameExists = sqlite.prepare('SELECT 1 FROM poker_games WHERE id = ?').get(gameId);
           
           console.log(`Direct DB check - User exists: ${!!userExists}, Game exists: ${!!gameExists}`);

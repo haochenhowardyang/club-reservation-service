@@ -29,20 +29,7 @@ export async function GET(request: NextRequest) {
       allUsers.map(async (user) => {
         let userName = user.name; // First try main table name
         
-        // If no name in main table, try auth table by ID
-        if (!userName) {
-          const authUserById = await db
-            .select({ name: authUsers.name })
-            .from(authUsers)
-            .where(eq(authUsers.id, user.id))
-            .limit(1);
-          
-          if (authUserById.length > 0 && authUserById[0].name) {
-            userName = authUserById[0].name;
-          }
-        }
-        
-        // If still no name, try auth table by email (fallback)
+        // If no name in main table, try auth table by email
         if (!userName) {
           const authUserByEmail = await db
             .select({ name: authUsers.name })

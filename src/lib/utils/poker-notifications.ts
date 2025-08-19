@@ -9,7 +9,7 @@ import { generateConfirmationToken, generateExpiryTimestamp, generateConfirmatio
  */
 export async function sendPokerConfirmationSMS(
   gameId: number,
-  userId: string
+  userEmail: string
 ): Promise<{ success: boolean; notificationId?: number; error?: string }> {
   try {
     // Get game details
@@ -25,11 +25,11 @@ export async function sendPokerConfirmationSMS(
       return { success: false, error: 'Game not found' };
     }
 
-    // Get user details (including phone number)
+    // Get user details (including phone number) using email-based schema
     const userResult = await db
       .select()
       .from(users)
-      .where(eq(users.id, userId))
+      .where(eq(users.email, userEmail))
       .limit(1);
     
     const user = userResult[0];
@@ -42,13 +42,13 @@ export async function sendPokerConfirmationSMS(
       return { success: false, error: 'User has no phone number' };
     }
 
-    // Check if we've already sent a confirmation for this game/user
+    // Check if we've already sent a confirmation for this game/user using email-based fields
     const existingNotificationResult = await db
       .select()
       .from(notifications)
       .where(and(
         eq(notifications.pokerGameId, gameId),
-        eq(notifications.userId, userId),
+        eq(notifications.userEmail, userEmail),
         eq(notifications.type, 'poker_confirmation')
       ))
       .limit(1);
@@ -64,9 +64,9 @@ export async function sendPokerConfirmationSMS(
     const expiresAt = generateExpiryTimestamp();
     const confirmationUrl = generateConfirmationUrl(confirmationToken);
 
-    // Create notification record
+    // Create notification record using email-based schema
     const notificationResult = await db.insert(notifications).values({
-      userId,
+      userEmail,
       pokerGameId: gameId,
       type: 'poker_confirmation',
       method: 'sms',
@@ -200,7 +200,7 @@ export async function handlePokerConfirmationResponse(
     }
 
     const gameId = notification.pokerGameId;
-    const userId = notification.userId;
+    const userEmail = notification.userEmail;
 
     if (!gameId) {
       return { success: false, error: 'Invalid game ID in notification' };
@@ -211,13 +211,13 @@ export async function handlePokerConfirmationResponse(
       .set({ status: response })
       .where(eq(notifications.id, notification.id));
 
-    // Find and update the corresponding waitlist entry
+    // Find and update the corresponding waitlist entry using email-based schema
     const waitlistEntryResult = await db
       .select()
       .from(pokerWaitlist)
       .where(and(
         eq(pokerWaitlist.gameId, gameId),
-        eq(pokerWaitlist.userId, userId)
+        eq(pokerWaitlist.userEmail, userEmail)
       ))
       .limit(1);
     
@@ -247,7 +247,7 @@ export async function handlePokerConfirmationResponse(
             .select()
             .from(reservations)
             .where(and(
-              eq(reservations.userId, userId),
+              eq(reservations.userEmail, notification.userEmail),
               eq(reservations.type, 'poker'),
               eq(reservations.date, currentGame.date),
               eq(reservations.startTime, currentGame.startTime),
@@ -260,7 +260,7 @@ export async function handlePokerConfirmationResponse(
           // Only create reservation if one doesn't already exist
           if (!existingReservation) {
             await db.insert(reservations).values({
-              userId: userId,
+              userEmail: notification.userEmail, // Use email from notification for email-based schema
               type: 'poker',
               date: currentGame.date,
               startTime: currentGame.startTime,
@@ -277,7 +277,7 @@ export async function handlePokerConfirmationResponse(
     return { 
       success: true, 
       gameId,
-      userId 
+      userId: userEmail 
     };
   } catch (error) {
     console.error('Error handling poker confirmation response:', error);
@@ -324,11 +324,11 @@ export async function getConfirmationDetails(token: string): Promise<{
       game = gameResult[0];
     }
 
-    // Get user details
+    // Get user details using email-based schema
     const userResult = await db
       .select()
       .from(users)
-      .where(eq(users.id, notification.userId))
+      .where(eq(users.email, notification.userEmail))
       .limit(1);
     
     const user = userResult[0];
