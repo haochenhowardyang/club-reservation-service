@@ -6,17 +6,36 @@ import { emailWhitelist } from './db/schema';
 import { users as authUsers } from './db/auth-schema';
 import { eq } from 'drizzle-orm';
 
+// Create a custom adapter that extends DrizzleAdapter to fix the OAuthAccountNotLinked error
+const customAdapter = {
+  ...DrizzleAdapter(db),
+  createUser: async (userData: any) => {
+    console.log('[CUSTOM ADAPTER] Creating user with data:', userData);
+    
+    // Ensure ID is always set to the email (lowercase)
+    if (userData.email) {
+      userData.id = userData.email.toLowerCase();
+      console.log('[CUSTOM ADAPTER] Set user ID to email:', userData.id);
+    }
+    
+    // Call the original adapter method with our modified data
+    return (DrizzleAdapter(db) as any).createUser(userData);
+  }
+};
+
 export const authOptions: NextAuthOptions = {
-  adapter: DrizzleAdapter(db) as any,
+  adapter: customAdapter as any,
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
   ],
-  // Fix for OAuthAccountNotLinked error
+  // Fix for OAuthAccountNotLinked error - both approaches for maximum compatibility
   // @ts-ignore - This property exists but is not in the type definition
   allowDangerousEmailAccountLinking: true,
+  // New debug logging for auth issues
+  debug: true,
   pages: {
     signIn: '/auth/signin',
     error: '/auth/error',
@@ -43,7 +62,7 @@ export const authOptions: NextAuthOptions = {
         
         if (existingMainUser.length > 0) {
           console.log(`[AUTH] 🔄 Found existing user in main table: ${user.email}`);
-          console.log(`[AUTH] Existing main table email: ${existingMainUser[0].email}, NextAuth ID: ${user.id}`);
+          console.log(`[AUTH] Existing main table email: ${existingMainUser[0].email}, NextAuth email: ${user.email}`);
           
           // Update main table to fill in name from Google
           console.log(`[AUTH] 🔧 Updating main table user with Google name`);
@@ -91,9 +110,9 @@ export const authOptions: NextAuthOptions = {
           await db
             .update(authUsers)
             .set(authUpdateData)
-            .where(eq(authUsers.id, user.id));
+            .where(eq(authUsers.id, user.email!.toLowerCase()));
           
-          console.log(`[AUTH] ✅ Synchronized both tables - using NextAuth ID: ${user.id}`);
+          console.log(`[AUTH] ✅ Synchronized both tables - using email: ${user.email}`);
           
           return;
         }
@@ -127,7 +146,7 @@ export const authOptions: NextAuthOptions = {
         await db
           .update(authUsers)
           .set({ role: 'admin' })
-          .where(eq(authUsers.id, user.id));
+          .where(eq(authUsers.id, user.email.toLowerCase()));
         console.log(`[AUTH] Set admin role for ${user.email}`);
       }
 
@@ -143,7 +162,7 @@ export const authOptions: NextAuthOptions = {
           await db
             .update(authUsers)
             .set({ phone: whitelistEntry[0].phone })
-            .where(eq(authUsers.id, user.id));
+            .where(eq(authUsers.id, user.email.toLowerCase()));
           console.log(`[AUTH] Copied phone from whitelist for ${user.email}`);
         }
       }
@@ -154,6 +173,37 @@ export const authOptions: NextAuthOptions = {
       console.log(`[AUTH] 🔥 signIn CALLBACK TRIGGERED`);
       console.log(`[AUTH] Account provider:`, account?.provider);
       console.log(`[AUTH] User data:`, JSON.stringify(user, null, 2));
+      console.log(`[AUTH] User ID type:`, typeof user.id);
+      console.log(`[AUTH] User ID value:`, user.id);
+      console.log(`[AUTH] Email equality check:`, user.email === user.email?.toLowerCase());
+      
+      // Fix for OAuthAccountNotLinked - ensure user.id is always the email
+      if (user.email && user.id !== user.email.toLowerCase()) {
+        console.log(`[AUTH] ⚠️ ID mismatch detected - attempting to fix...`);
+        console.log(`[AUTH] Current ID: ${user.id}, Email: ${user.email.toLowerCase()}`);
+        
+        try {
+          // Check if there's an existing auth user with the email as ID
+          const existingAuthUser = await db
+            .select()
+            .from(authUsers)
+            .where(eq(authUsers.id, user.email.toLowerCase()))
+            .limit(1);
+          
+          if (existingAuthUser.length === 0) {
+            console.log(`[AUTH] No existing user with email as ID found, will create new one via adapter`);
+            // The custom adapter will handle this
+          } else {
+            console.log(`[AUTH] Found existing user with email as ID, will link accounts`);
+          }
+          
+          // Force ID to be email in user object (might help with adapter)
+          user.id = user.email.toLowerCase();
+          console.log(`[AUTH] Set user.id to email: ${user.id}`);
+        } catch (error) {
+          console.error(`[AUTH] Error fixing ID mismatch:`, error);
+        }
+      }
       
       // Check if user email is whitelisted before allowing sign-in
       if (user.email) {
@@ -209,14 +259,14 @@ export const authOptions: NextAuthOptions = {
             const existingAuthUser = await db
               .select()
               .from(authUsers)
-              .where(eq(authUsers.email, user.email.toLowerCase()))
+              .where(eq(authUsers.id, user.email.toLowerCase()))
               .limit(1);
             
             if (existingAuthUser.length > 0) {
               await db
                 .update(authUsers)
                 .set({ name: user.name })
-                .where(eq(authUsers.email, user.email.toLowerCase()));
+                .where(eq(authUsers.id, user.email.toLowerCase()));
             }
             
             console.log(`[AUTH] ✅ Updated name for existing user: ${user.email}`);
@@ -231,7 +281,7 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, user }) {
       if (session.user && user) {
-        // Get user role and other info from database
+        // Get user role and other info from database (id field contains email)
         const dbUser = await db
           .select()
           .from(authUsers)
@@ -239,7 +289,7 @@ export const authOptions: NextAuthOptions = {
           .limit(1);
 
         if (dbUser.length > 0) {
-          session.user.id = user.id;
+          session.user.id = user.id; // Use NextAuth user.id (contains email)
           session.user.role = dbUser[0].role;
           session.user.strikes = dbUser[0].strikes;
           session.user.isActive = dbUser[0].isActive;
@@ -249,9 +299,9 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
     async jwt({ token, user, account, profile }) {
-      // Add user ID and role to the token
+      // Add user ID and role to the token (id contains email value)
       if (user) {
-        token.id = user.id;
+        token.id = user.id; // Use NextAuth user.id (contains email)
         token.role = (user as any).role || 'user';
       }
       return token;

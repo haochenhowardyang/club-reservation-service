@@ -99,7 +99,10 @@ try {
       console.error(error.message);
       
       // For existing databases, if the error is about existing tables/columns, it might be safe to continue
-      if (error.message.includes('already exists') && hasExistingData) {
+      const isDuplicateError = error.message.includes('already exists') || 
+                              error.message.includes('duplicate column name');
+      
+      if (isDuplicateError && hasExistingData) {
         console.log(`⚠️  Table/column already exists - marking migration as applied: ${migrationHash}`);
         db.prepare('INSERT INTO __drizzle_migrations (hash) VALUES (?)').run(migrationHash);
         migrationsRun++;

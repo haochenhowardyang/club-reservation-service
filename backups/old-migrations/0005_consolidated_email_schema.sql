@@ -161,7 +161,7 @@ CREATE TABLE `notifications` (
 	`poker_game_id` integer,
 	`type` text NOT NULL CHECK(type IN ('24h_reminder', '3h_reminder', '4h_reminder', 'promotion', 'cancellation', 'auto_cancelled', 'poker_confirmation', 'poker_invitation', 'poker_reminder', 'poker_cancellation')),
 	`method` text NOT NULL CHECK(method IN ('sms', 'email')),
-	`status` text DEFAULT 'pending' NOT NULL CHECK(status IN ('pending', 'sent', 'failed')),
+	`status` text DEFAULT 'pending' NOT NULL CHECK(status IN ('pending', 'sent', 'failed', 'confirmed', 'declined', 'expired')),
 	`sent_at` integer,
 	`created_at` integer NOT NULL,
 	FOREIGN KEY (`user_email`) REFERENCES `users`(`email`) ON DELETE CASCADE,

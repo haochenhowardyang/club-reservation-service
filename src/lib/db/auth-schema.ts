@@ -1,22 +1,22 @@
 import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
-import { sql } from 'drizzle-orm';
 
-// NextAuth.js required tables - Gmail as User ID (id field contains Gmail addresses)
+// NextAuth.js tables adapted for email-based architecture  
+// Uses NextAuth column names but stores email values in id field
 export const users = sqliteTable('user', {
-  id: text('id').primaryKey(), // Contains Gmail addresses (e.g., "user@gmail.com")
-  email: text('email').notNull().unique(), // Same Gmail address as id
+  id: text('id').primaryKey(), // Contains email values (not UUIDs)
   name: text('name'),
+  email: text('email').notNull().unique(), // Duplicate of id for compatibility
   image: text('image'),
-  emailVerified: integer('emailVerified', { mode: 'timestamp' }),
-  phone: text('phone'), // Optional phone number
   role: text('role', { enum: ['user', 'admin'] }).notNull().default('user'),
+  phone: text('phone'),
   strikes: integer('strikes').notNull().default(0),
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  emailVerified: integer('emailVerified', { mode: 'timestamp' }),
 });
 
 export const accounts = sqliteTable('account', {
-  id: text('id').primaryKey(),
-  userId: text('userId').notNull().references(() => users.id, { onDelete: 'cascade' }), // References Gmail address in users.id
+  id: integer('id').primaryKey({ autoIncrement: true }), // Auto-increment ID
+  userId: text('userId').notNull().references(() => users.id, { onDelete: 'cascade' }), // References user.id (contains email values)
   type: text('type').notNull(),
   provider: text('provider').notNull(),
   providerAccountId: text('providerAccountId').notNull(),
@@ -30,8 +30,8 @@ export const accounts = sqliteTable('account', {
 });
 
 export const sessions = sqliteTable('session', {
-  id: text('id').primaryKey(),
-  userId: text('userId').notNull().references(() => users.id, { onDelete: 'cascade' }), // References Gmail address in users.id
+  id: integer('id').primaryKey({ autoIncrement: true }), // Auto-increment ID
+  userId: text('userId').notNull().references(() => users.id, { onDelete: 'cascade' }), // References user.id (contains email values)
   sessionToken: text('sessionToken').notNull().unique(),
   expires: integer('expires', { mode: 'timestamp' }).notNull(),
 });
@@ -43,7 +43,6 @@ export const verificationTokens = sqliteTable('verification_token', {
 });
 
 // Add a unique constraint on identifier and token
-// This is equivalent to a compound primary key
 export const verificationTokensIndex = sqliteTable('verification_token_idx', {
   identifier: text('identifier').notNull(),
   token: text('token').notNull(),

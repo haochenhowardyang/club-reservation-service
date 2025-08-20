@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { reservations } from '../db/schema';
+import { reservations, users } from '../db/schema';
 import { eq, and, gte, lt, desc, asc } from 'drizzle-orm';
 import { isSlotAvailable, exceedsBarTimeLimit } from './availability';
 import { addToWaitlist, promoteFromWaitlist } from './waitlist';
@@ -198,9 +198,9 @@ export async function createReservation(
  */
 export async function cancelReservation(
   reservationId: number,
-  userId: string
+  userIdentifier: string
 ): Promise<{ success: boolean; error?: string; details?: string }> {
-  console.log(`[CANCEL] Starting cancellation for reservation ${reservationId} by user ${userId}`);
+  console.log(`[CANCEL] Starting cancellation for reservation ${reservationId} by user ${userIdentifier}`);
   
   try {
     // Get the reservation with detailed logging
@@ -221,16 +221,33 @@ export async function cancelReservation(
     
     console.log(`[CANCEL] Reservation details:`, {
       id: reservation.id,
-      userId: reservation.userId,
+      userEmail: reservation.userEmail,
       status: reservation.status,
       date: reservation.date,
       startTime: reservation.startTime,
       type: reservation.type
     });
     
+    // Check if the user making the request has an email matching the reservation owner
+    // or if they're providing the email directly
+    const userEmail = userIdentifier.includes('@') 
+      ? userIdentifier // User identifier is already an email
+      : await getUserEmailFromId(userIdentifier); // Look up email from UUID
+      
+    if (!userEmail) {
+      console.log(`[CANCEL] Could not resolve user email from identifier: ${userIdentifier}`);
+      return {
+        success: false,
+        error: 'USER_NOT_FOUND',
+        details: 'User information could not be retrieved'
+      };
+    }
+    
+    console.log(`[CANCEL] Resolved user email: ${userEmail}`);
+    
     // Check if the user owns this reservation
-    if (reservation.userId !== userId) {
-      console.log(`[CANCEL] Permission denied - reservation owner: ${reservation.userId}, requesting user: ${userId}`);
+    if (reservation.userEmail !== userEmail) {
+      console.log(`[CANCEL] Permission denied - reservation owner: ${reservation.userEmail}, requesting user: ${userEmail}`);
       return { 
         success: false, 
         error: 'PERMISSION_DENIED',
@@ -353,14 +370,40 @@ export async function getUpcomingReservations() {
 /**
  * Update a user's strike count
  */
+/**
+ * Look up a user's email from their NextAuth ID
+ */
+async function getUserEmailFromId(userId: string): Promise<string | null> {
+  try {
+    // Import the auth users table
+    const authUsers = (await import('../db/auth-schema')).users;
+    
+    // Try to find the user in the auth table
+    const authUser = await db
+      .select()
+      .from(authUsers)
+      .where(eq(authUsers.id, userId))
+      .limit(1)
+      .then(users => users[0] || null);
+    
+    if (authUser?.email) {
+      console.log(`[USER] Found email ${authUser.email} for user ID ${userId}`);
+      return authUser.email;
+    }
+    
+    console.log(`[USER] Could not find email for user ID ${userId}`);
+    return null;
+  } catch (error) {
+    console.error(`[USER] Error looking up user email:`, error);
+    return null;
+  }
+}
+
 export async function updateUserStrikes(userId: string, strikes: number): Promise<boolean> {
   try {
-    // Import users table directly for this operation
-    const { users } = await import('../db/schema');
-    
     await db.update(users)
       .set({ strikes })
-      .where(eq(users.id, userId));
+      .where(eq(users.email, userId));
     return true;
   } catch (error) {
     console.error('Error updating user strikes:', error);
