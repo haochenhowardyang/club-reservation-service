@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { reservations, users } from '../db/schema';
+import { reservations, users, pokerWaitlist, pokerGames } from '../db/schema';
 import { eq, and, gte, lt, desc, asc } from 'drizzle-orm';
 import { isSlotAvailable, exceedsBarTimeLimit } from './availability';
 import { addToWaitlist, promoteFromWaitlist } from './waitlist';
@@ -276,6 +276,48 @@ export async function cancelReservation(
       .where(eq(reservations.id, reservationId));
     
     console.log(`[CANCEL] Reservation status updated successfully`);
+    
+    // If this is a poker reservation, update the waitlist status
+    if (reservation.type === 'poker') {
+      try {
+        console.log(`[CANCEL] This is a poker reservation, updating waitlist status...`);
+        
+        // Import poker waitlist table
+        const { pokerWaitlist } = await import('../db/schema');
+        
+        // Find poker games that match this reservation's date and time
+        const { pokerGames } = await import('../db/schema');
+        const matchingGame = await db.query.pokerGames.findFirst({
+          where: and(
+            eq(pokerGames.date, reservation.date),
+            eq(pokerGames.startTime, reservation.startTime)
+          )
+        });
+        
+        if (matchingGame) {
+          console.log(`[CANCEL] Found matching poker game ${matchingGame.id}, updating waitlist...`);
+          
+          // Remove the user from the waitlist entirely
+          const deletedWaitlist = await db
+            .delete(pokerWaitlist)
+            .where(and(
+              eq(pokerWaitlist.gameId, matchingGame.id),
+              eq(pokerWaitlist.userEmail, userEmail)
+            ));
+          
+          if (deletedWaitlist.changes > 0) {
+            console.log(`[CANCEL] Successfully removed user ${userEmail} from poker waitlist for game ${matchingGame.id}`);
+          } else {
+            console.log(`[CANCEL] No waitlist entry found to remove for user ${userEmail} and game ${matchingGame.id}`);
+          }
+        } else {
+          console.log(`[CANCEL] No matching poker game found for reservation ${reservation.date} ${reservation.startTime}`);
+        }
+      } catch (pokerError) {
+        console.warn(`[CANCEL] Error updating poker waitlist status:`, pokerError);
+        // Don't fail the cancellation if waitlist update fails
+      }
+    }
     
     // Send cancellation notification (non-blocking)
     try {
